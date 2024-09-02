@@ -19,9 +19,7 @@ LOG.addHandler(logging.StreamHandler(sys.stdout))
 IMAGE_VERSIONS = ["v1.7.0"]
 # TODO(aznashwan): enable previous version testing too:
 # IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
-CHART_RELEASE_URL = (
-    "https://github.com/longhorn/charts/releases/download/longhorn-1.7.0/longhorn-1.7.0.tgz"
-)
+CHART_RELEASE_URL = "https://github.com/longhorn/charts/releases/download/longhorn-1.7.0/longhorn-1.7.0.tgz"
 INSTALL_NAME = "longhorn"
 
 LONGHORN_AUX_IMAGES_VERSION_MAP = {
@@ -33,7 +31,7 @@ LONGHORN_AUX_IMAGES_VERSION_MAP = {
         "csi-resizer": "v1.11.1",
         "csi-snapshotter": "v7.0.2",
         "livenessprobe": "v2.13.1",
-        "openshift-origin-oauth-proxy": "4.15"
+        "openshift-origin-oauth-proxy": "4.15",
     }
 }
 
