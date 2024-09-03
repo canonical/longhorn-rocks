@@ -36,7 +36,7 @@ LONGHORN_AUX_IMAGES_VERSION_MAP = {
 }
 
 # This mapping indicates which fields of the upstream Longhorn Helm chart
-# contain the 'image' fields which should be overriden with the ROCK
+# contain the 'image' fields which should be overridden with the ROCK
 # image URLs and version during testing.
 # https://github.com/longhorn/charts/blob/v1.7.x/charts/longhorn/values.yaml#L38-L109
 IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
@@ -112,10 +112,10 @@ def test_longhorn_helm_chart_deployment(
         "longhorn-csi-plugin",
         "longhorn-manager",
     ]
-    for stateful_set in daemonsets:
+    for daemonset in daemonsets:
         k8s_util.wait_for_daemonset(
             function_instance,
-            stateful_set,
+            daemonset,
             **retry_kwargs,
         )
 
