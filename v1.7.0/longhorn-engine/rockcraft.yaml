@@ -58,7 +58,6 @@ parts:
       - linux-headers-6.8.0-41
       - pkg-config
       - psmisc
-      # - qemu-tools
       - fuse
       - librdmacm-dev
       - rdmacm-utils
@@ -263,5 +262,5 @@ parts:
       - iputils-tracepath
       - iputils-clockdiff
       - iproute2
-      # - qemu-tools
+      - qemu-utils
       - e2fsprogs
