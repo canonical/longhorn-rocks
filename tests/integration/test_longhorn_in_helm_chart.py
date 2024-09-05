@@ -4,7 +4,9 @@
 
 import json
 import logging
+import pathlib
 import sys
+import time
 
 import pytest
 from k8s_test_harness import harness
@@ -15,12 +17,18 @@ LOG: logging.Logger = logging.getLogger(__name__)
 LOG.addHandler(logging.FileHandler(f"{__name__}.log"))
 LOG.addHandler(logging.StreamHandler(sys.stdout))
 
+DIR = pathlib.Path(__file__).absolute().parent
+TEMPLATES_DIR = DIR / ".." / "templates"
+
+CSI_VOLUME_ANNOTATION = "csi.volume.kubernetes.io/nodeid"
+LONGHORN_CSI_ANNOTATION_VALUE = "driver.longhorn.io"
 
 IMAGE_VERSIONS = ["v1.7.0"]
 # TODO(aznashwan): enable previous version testing too:
 # IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
 CHART_RELEASE_URL = "https://github.com/longhorn/charts/releases/download/longhorn-1.7.0/longhorn-1.7.0.tgz"
 INSTALL_NAME = "longhorn"
+INSTALL_NS = "longhorn"
 
 LONGHORN_AUX_IMAGES_VERSION_MAP = {
     # https://github.com/longhorn/longhorn/releases/download/v1.7.0/longhorn-images.txt
@@ -55,6 +63,27 @@ IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
     "livenessprobe": "csi.livenessProbe",
     "openshift-origin-oauth-proxy": "openshift.oauthProxy",
 }
+
+
+def _wait_for_node_annotation(instance, annotation, value):
+    escaped_annotation = annotation.translate(str.maketrans({".": "\\.", "/": "\\/"}))
+    jsonpath = f"jsonpath='{{.items[0].metadata.annotations.{escaped_annotation}}}'"
+
+    annotated = False
+    for i in range(10):
+        process = instance.exec(
+            ["k8s", "kubectl", "get", "nodes", "-o", jsonpath],
+            capture_output=True,
+            text=True,
+        )
+
+        if value in process.stdout:
+            annotated = True
+            break
+
+        time.sleep(5)
+
+    assert annotated, f"Expected node to have annotation '{annotation}={value}'."
 
 
 @pytest.mark.parametrize("image_version", IMAGE_VERSIONS)
@@ -99,6 +128,9 @@ def test_longhorn_helm_chart_deployment(
         "install",
         INSTALL_NAME,
         CHART_RELEASE_URL,
+        "--namespace",
+        INSTALL_NS,
+        "--create-namespace",
     ]
     helm_command.extend(all_chart_value_overrides_args)
 
@@ -116,6 +148,7 @@ def test_longhorn_helm_chart_deployment(
         k8s_util.wait_for_daemonset(
             function_instance,
             daemonset,
+            INSTALL_NS,
             **retry_kwargs,
         )
 
@@ -131,6 +164,44 @@ def test_longhorn_helm_chart_deployment(
         k8s_util.wait_for_deployment(
             function_instance,
             deployment,
+            INSTALL_NS,
             condition=constants.K8S_CONDITION_AVAILABLE,
             **retry_kwargs,
         )
+
+    # Wait until the node gets annotated with driver.longhorn.io, meaning that the Longhorn CSI
+    # plugin was successfully registered.
+    _wait_for_node_annotation(
+        function_instance, CSI_VOLUME_ANNOTATION, LONGHORN_CSI_ANNOTATION_VALUE
+    )
+
+    # Deploy an nginx Pod with a PVC, which should be satisfied by Longhorn.
+    function_instance.exec(
+        ["k8s", "kubectl", "apply", "-f", "-"],
+        input=pathlib.Path(TEMPLATES_DIR / "nginx-pod.yaml").read_bytes(),
+    )
+
+    # Expect the Pod to become ready, and that it has the volume attached.
+    k8s_util.wait_for_resource(
+        function_instance,
+        "pod",
+        "nginx-longhorn-example",
+        condition=constants.K8S_CONDITION_READY,
+    )
+
+    process = function_instance.exec(
+        [
+            "k8s",
+            "kubectl",
+            "exec",
+            "nginx-longhorn-example",
+            "--",
+            "bash",
+            "-c",
+            "findmnt /var/www -o FSTYPE,TARGET,SOURCE",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert "ext4   /var/www /dev/longhorn/pvc-" in process.stdout
