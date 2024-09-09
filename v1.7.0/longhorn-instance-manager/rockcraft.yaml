@@ -21,7 +21,9 @@ base: ubuntu@24.04
 build-base: ubuntu@24.04
 platforms:
   amd64:
-  arm64:
+
+environment:
+  LD_LIBRARY_PATH: /usr/local/lib
 
 services:
   longhorn-instance-manager:
@@ -30,7 +32,8 @@ services:
     override: replace
 
     # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L175-L177
-    command: /tini -- [ longhorn ]
+    # https://github.com/longhorn/longhorn-instance-manager/pull/664
+    command: /tini -- [ longhorn-instance-manager ]
 
     on-success: shutdown
     on-failure: shutdown
@@ -89,7 +92,7 @@ parts:
       make -j$(nproc)
       make install
 
-      ldconfig
+      ldconfig -p
 
   # The Makefile targets are just the scripts found in the scripts/ directory which
   # are executed within the Dapper build container:
@@ -114,11 +117,9 @@ parts:
 
       bash ./scripts/build
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165-L166
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
       cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
-
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L166
       cp package/instance-manager $CRAFT_PART_INSTALL/usr/local/bin
 
   # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L18-L26
@@ -199,8 +200,8 @@ parts:
       make install
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L151-L157
-      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp /usr/sbin/{tgt-admin,tgt-setup-lun,tgtadm,tgtd,tgtimg} $CRAFT_PART_INSTALL/usr/local/bin
+      mkdir -p $CRAFT_PART_INSTALL/usr/sbin
+      cp /usr/sbin/{tgt-admin,tgt-setup-lun,tgtadm,tgtd,tgtimg} $CRAFT_PART_INSTALL/usr/sbin
 
   # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L72-L93
   build-spdk:
@@ -264,7 +265,11 @@ parts:
       make
       make install
 
-      # TODO(aznashwan): copy lib to final image
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
+      cp /usr/local/lib/libjson-c* $CRAFT_PART_INSTALL/usr/local/lib/
+
+      ldconfig -p
 
   # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L106-L113
   build-nvme-cli:
@@ -289,8 +294,14 @@ parts:
       meson install -C .build
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L147-L149
-      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp /usr/local/sbin/nvme $CRAFT_PART_INSTALL/usr/local/bin
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin
+      cp /usr/local/sbin/nvme $CRAFT_PART_INSTALL/usr/local/sbin
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
+      cp /usr/local/lib/*/libnvme*.so $CRAFT_PART_INSTALL/usr/local/lib/
+
+      ldconfig -p
 
   # Pulls a pre-built binary release of the `tini` init system.
   # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L173
@@ -336,4 +347,14 @@ parts:
       - procps
       - libfuse3-3        # fuse3-devel
       - awk
+      # NOTE(aznashwan): although not explicitly installed in any of the
+      # upstream build procedures, some of the secondary CLI tools
+      # (e.g. nvmecli) require libncurses:
+      - libncurses-dev
+
+    override-build: |
+      set -eux -o pipefail
+
+      mkdir -p $CRAFT_PART_INSTALL/etc/ld.so.conf.d
+      echo /usr/local/lib > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/99_local_libs.conf
 

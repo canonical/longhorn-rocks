@@ -74,3 +74,7 @@ def test_check_rock_image_contents(image_version):
         rock_image,
         binary_paths_to_check,
     )
+
+    process = docker_util.run_in_docker(rock_image, ["nvme", "version"])
+    assert "nvme version 2.9.1" in process.stdout
+    assert "libnvme version 1.9" in process.stdout
