@@ -12,10 +12,12 @@ upstream images:
 * longhornio/longhorn-share-manager
 * longhornio/backing-image-manager
 * longhornio/support-bundle-kit
+
+The CSI components required by Longhorn can be found here: https://github.com/canonical/csi-rocks. The repository contains the rock equivalent of the following images:
+
 * longhornio/csi-attacher
 * longhornio/csi-provisioner
 * longhornio/csi-node-driver-registrar
 * longhornio/csi-resizer
 * longhornio/csi-snapshotter
 * longhornio/livenessprobe
-* longhornio/openshift-origin-oauth-proxy
