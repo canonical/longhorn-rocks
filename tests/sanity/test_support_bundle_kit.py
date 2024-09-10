@@ -6,7 +6,6 @@ import pytest
 from k8s_test_harness.util import docker_util, env_util
 
 ROCK_EXPECTED_FILES = [
-    "/bin/pebble",
     "/tmp/common",
     "/usr/bin/entrypoint.sh",
     "/usr/bin/collector-harvester",

@@ -6,7 +6,6 @@ import pytest
 from k8s_test_harness.util import docker_util, env_util
 
 ROCK_EXPECTED_FILES = [
-    "/bin/pebble",
     "/etc/dbus-1/system.d/org.ganesha.nfsd.conf",
     "/etc/ld.so.conf.d/local_libs.conf",
     "/etc/mtab",

@@ -46,7 +46,7 @@ parts:
       - yq
 
   add-support-bundle-kit:
-    plugin: go
+    plugin: nil
     source: https://github.com/rancher/support-bundle-kit
     source-type: git
     source-tag: $CRAFT_PROJECT_VERSION
@@ -58,14 +58,14 @@ parts:
       - GOARCH: $CRAFT_ARCH_BUILD_FOR
       - CGO_ENABLED: 0
       - VERSION: $CRAFT_PROJECT_VERSION
-    go-buildtags:
-      - "ldflags='-extldflags -static -s -X github.com/rancher/support-bundle-kit/cmd.AppVersion=$VERSION'"
     organize:
       bin/support-bundle-kit: usr/bin/
     override-build: |
-      craftctl default
-
       mkdir -p "${CRAFT_PART_INSTALL}/usr/bin/" "${CRAFT_PART_INSTALL}/tmp"
+
+      LINKFLAGS="-extldflags -static -s -X github.com/rancher/support-bundle-kit/cmd.AppVersion=$VERSION"
+      go build -o $CRAFT_PART_INSTALL/usr/bin/ -ldflags "$LINKFLAGS"
+
       cp package/entrypoint.sh "${CRAFT_PART_INSTALL}/usr/bin/"
       cp hack/support-bundle-collector.sh hack/collector-* "${CRAFT_PART_INSTALL}/usr/bin/"
       cp hack/common "${CRAFT_PART_INSTALL}/tmp"
