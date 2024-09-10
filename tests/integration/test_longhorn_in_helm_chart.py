@@ -55,13 +55,20 @@ IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
     "longhorn-share-manager": "longhorn.shareManager",
     "backing-image-manager": "longhorn.backingImageManager",
     "support-bundle-kit": "longhorn.supportBundleKit",
-    "csi-attacher": "csi.attacher",
-    "csi-provisioner": "csi.provisioner",
-    "csi-node-driver-registrar": "csi.nodeDriverRegistrar",
-    "csi-resizer": "csi.resizer",
-    "csi-snapshotter": "csi.snapshotter",
-    "livenessprobe": "csi.livenessProbe",
     "openshift-origin-oauth-proxy": "openshift.oauthProxy",
+}
+
+LONGHORN_CSI_IMAGES_VERSION_MAP = {
+    # https://github.com/longhorn/longhorn/releases/download/v1.7.0/longhorn-images.txt
+    "v1.7.0": {
+        # helm image subsection: image
+        "csi.attacher": "ghcr.io/canonical/csi-attacher:4.6.1-ck5",
+        "csi.provisioner": "ghcr.io/canonical/csi-provisioner:4.0.1-ck4",
+        "csi.nodeDriverRegistrar": "ghcr.io/canonical/csi-node-driver-registrar:2.11.1-ck3",
+        "csi.resizer": "ghcr.io/canonical/csi-resizer:1.11.1-ck1",
+        "csi.snapshotter": "ghcr.io/canonical/csi-snapshotter:7.0.2-ck2",
+        "csi.livenessProbe": "ghcr.io/canonical/livenessprobe:2.13.1-ck0",
+    },
 }
 
 
@@ -121,17 +128,14 @@ def test_longhorn_helm_chart_deployment(
             )
             found_env_rocks_metadata.append(rmi.name)
 
-    helm_command = [
-        "sudo",
-        "k8s",
-        "helm",
-        "install",
-        INSTALL_NAME,
-        CHART_RELEASE_URL,
-        "--namespace",
-        INSTALL_NS,
-        "--create-namespace",
+    images = [
+        k8s_util.HelmImage(image, subitem=subsection)
+        for subsection, image in LONGHORN_CSI_IMAGES_VERSION_MAP[image_version].items()
     ]
+
+    helm_command = k8s_util.get_helm_install_command(
+        INSTALL_NAME, CHART_RELEASE_URL, INSTALL_NS, images=images
+    )
     helm_command.extend(all_chart_value_overrides_args)
 
     function_instance.exec(helm_command)
