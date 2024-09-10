@@ -31,12 +31,14 @@ services:
     startup: enabled
     override: replace
 
-    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L175-L177
-    # https://github.com/longhorn/longhorn-instance-manager/pull/664
-    command: /tini -- [ longhorn-instance-manager ]
+    # NOTE(aznashwan): the entrypoint script we add to the rock simply runs
+    # `ldconfig` before `exec`-ing the `tini` init service with the args:
+    command: bash /pebble-entrypoint.sh [ longhorn-instance-manager ]
 
     on-success: shutdown
     on-failure: shutdown
+
+entrypoint-service: longhorn-instance-manager
 
 parts:
   # NOTE(aznashwan): the longhorn binary is built within a Docker container
@@ -356,5 +358,9 @@ parts:
       set -eux -o pipefail
 
       mkdir -p $CRAFT_PART_INSTALL/etc/ld.so.conf.d
-      echo /usr/local/lib > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/99_local_libs.conf
+      echo /usr/local/lib > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/99_usr_local_lib.conf
+
+      cp $CRAFT_PROJECT_DIR/pebble-entrypoint.sh $CRAFT_PART_INSTALL/pebble-entrypoint.sh
+      chmod +x $CRAFT_PART_INSTALL/pebble-entrypoint.sh
+
 
