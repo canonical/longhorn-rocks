@@ -68,6 +68,7 @@ def test_check_rock_image_contents(image_version):
         ]
     ]
     binary_paths_to_check.append("/usr/local/sbin/nvme")
+    binary_paths_to_check.append("/lib/modules")
     binary_paths_to_check.append("/tini")
 
     docker_util.ensure_image_contains_paths(
