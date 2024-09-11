@@ -1,0 +1,173 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Longhorn share manager image:
+# longhornio/longhorn-share-manager:v1.6.2
+
+name: longhorn-share-manager
+summary: Rock containing Longhorn share manager component.
+description: |
+  Rock containing Longhorn share manager component: https://github.com/longhorn/longhorn-share-manager
+  Aims to replicate the upstream official image: longhornio/longhorn-share-manager:v1.6.2
+license: Apache-2.0
+
+version: "v1.6.2"
+
+# NOTE(aznashwan): the base for the share manager image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L42
+base: ubuntu@24.04
+build-base: ubuntu@24.04
+platforms:
+  amd64:
+
+services:
+  longhorn-share-manager:
+    summary: "longhorn-share-manager service"
+    startup: enabled
+    override: replace
+    # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L72
+    command: "/longhorn-share-manager"
+    on-success: shutdown
+    on-failure: shutdown
+
+parts:
+  # NOTE(aznashwan): the longhorn binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/Dockerfile.dapper
+  # The Makefile targets are just the scripts found in the scripts/ directory which
+  # are executed within the Dapper build container:
+  # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/Makefile#L10-L11
+  build-longhorn-share-manager:
+    plugin: nil
+    source-type: git
+    source: https://github.com/longhorn/longhorn-share-manager
+    source-tag: ${CRAFT_PROJECT_VERSION}
+    source-depth: 1
+
+    build-packages:
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/Dockerfile.dapper#L21
+      - gcc
+      - linux-libc-dev  # linux-glibc-devel
+      - libc6-dev  # glibc-devel
+    build-snaps:
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/Dockerfile.dapper#L34
+      - go/1.21/stable
+    build-environment:
+      - GOOS: linux
+      - GOARCH: $CRAFT_ARCH_BUILD_FOR
+      - CGO_ENABLED: 0
+      - VERSION: $CRAFT_PROJECT_VERSION
+    override-build: |
+      LINKFLAGS="-X main.Version=$VERSION -extldflags -static -s"
+      go build -o $CRAFT_PART_INSTALL/ -ldflags "$LINKFLAGS"
+
+  # Based on:
+  # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L17-L22
+  # https://github.com/kubernetes-sigs/nfs-ganesha-server-and-external-provisioner/blob/7027d6505a510673579c03db589bcb02cc8eda0b/deploy/base/Dockerfile
+  build-ganesha:
+    plugin: nil
+    source-type: git
+    source: https://github.com/nfs-ganesha/nfs-ganesha
+    source-tag: V5.7
+    source-depth: 1
+    # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L12-L14
+    build-packages:
+      - autoconf
+      - bison
+      - cmake
+      - doxygen
+      - git
+      - gcc  # gcc-c++
+      - flex
+      - libgl1-mesa-dev  # Mesa-libGL-devel
+      - libdbus-1-3
+      - libdbus-1-dev  # dbus-1-devel
+      - libnfsidmap-dev  # nfsidmap-devel
+      - liburcu-dev  # liburcu-devel
+      - libblkid-dev  # libblkid-devel
+      - e2fsprogs
+      - xfsprogs
+      - lsb-release
+      - graphviz-dev  # graphviz-devel
+      - libnsl-dev  # libnsl-devel
+      - libcurl4-gnutls-dev  # libcurl-devel
+      - libjson-c-dev  # libjson-c-devel
+      - libacl1-dev  # libacl-devel
+
+    # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L48
+    stage-packages:
+      - rpcbind
+      - libblkid1
+      # - liburcu6 - already included.
+      - dbus-x11  # dbus-1-x11
+      - libdbus-1-3  # dbus-1
+      - libnfsidmap-dev  # nfsidmap-devel
+      - nfs-kernel-server
+      - nfs-common  # nfs-client
+      - nfs4-acl-tools
+      - xfsprogs
+      - e2fsprogs
+
+    override-build: |
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L17-L22
+      curl -L https://github.com/nfs-ganesha/ntirpc/archive/refs/tags/v5.0.tar.gz | tar zx
+
+      # Currently, ntirpc v5.0 fails to build with the following error:
+      # /usr/bin/ld: libntirpc/src/libntirpc.so.5.0: undefined reference to `assert'
+      # This issue has been fixed in v5.8 and newer.
+      # We're applying that bug fix patch: https://github.com/nfs-ganesha/ntirpc/pull/279
+      # Moving to /tmp, so we can apply the patch.
+      mv ntirpc-5.0 /tmp/
+      pushd /tmp/ntirpc-5.0
+      cp $CRAFT_PROJECT_DIR/correct-include-assert.patch ./
+      git apply -v correct-include-assert.patch
+      popd
+
+      rm -r src/libntirpc
+      mv /tmp/ntirpc-5.0 src/libntirpc
+
+      # build ganesha only supporting nfsv4 and vfs.
+      # set NFS_V4_RECOV_ROOT to /tmp we don't support recovery in this release.
+      # we disable dbus (-DUSE_DBUS=OFF) for the single share manager since we don't use dynamic exports.
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L28
+      cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_CONFIG=vfs_only \
+        -DUSE_DBUS=OFF -DUSE_NFS3=OFF -DUSE_NLM=OFF -DUSE_RQUOTA=OFF -DUSE_9P=OFF -D_MSPAC_SUPPORT=OFF -DRPCBIND=OFF \
+        -DUSE_RADOS_RECOV=OFF -DRADOS_URLS=OFF -DUSE_FSAL_VFS=ON -DUSE_FSAL_XFS=OFF \
+        -DUSE_FSAL_PROXY_V4=OFF -DUSE_FSAL_PROXY_V3=OFF -DUSE_FSAL_LUSTRE=OFF -DUSE_FSAL_LIZARDFS=OFF \
+        -DUSE_FSAL_KVSFS=OFF -DUSE_FSAL_CEPH=OFF -DUSE_FSAL_GPFS=OFF -DUSE_FSAL_PANFS=OFF -DUSE_FSAL_GLUSTER=OFF \
+        -DUSE_GSS=NO -DHAVE_ACL_GET_FD_NP=ON -DHAVE_ACL_SET_FD_NP=ON \
+        -DCMAKE_INSTALL_PREFIX=/usr/local src/
+
+      make
+      make install
+
+      # ganesha.nfsd needs to be linked with its libganesha_nfsd.so.
+      # ldconfig will generate /etc/ld.so.cache, which we'll need to include in the final image.
+      ldconfig
+
+      mkdir -p $CRAFT_PART_INSTALL/etc/ld.so.conf.d $CRAFT_PART_INSTALL/usr/local
+      cp /etc/ld.so.cache $CRAFT_PART_INSTALL/etc/
+      cp -R /usr/local/bin $CRAFT_PART_INSTALL/usr/local/
+      cp -R /usr/local/lib $CRAFT_PART_INSTALL/usr/local/
+
+      # ganesha reads /etc/mtab for mounted volumes.
+      ln -sf /proc/self/mounts $CRAFT_PART_INSTALL/etc/mtab
+
+      # create and add the ganesha-extra files.
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L40
+      mkdir -p $CRAFT_PART_INSTALL/etc/dbus-1/system.d
+      cp src/scripts/ganeshactl/org.ganesha.nfsd.conf $CRAFT_PART_INSTALL/etc/dbus-1/system.d/ 
+
+      # add libs from /usr/local/lib64
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L62
+      echo /usr/local/lib64 > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/local_libs.conf
+
+      # create other files.
+      mkdir -p $CRAFT_PART_INSTALL/var/run/dbus $CRAFT_PART_INSTALL/export
+
+      # do not ask systemd for user IDs or groups (slows down dbus-daemon start),
+      cp /etc/nsswitch.conf $CRAFT_PART_INSTALL/etc/
+      sed -i s/systemd// $CRAFT_PART_INSTALL/etc/nsswitch.conf

@@ -16,8 +16,14 @@ ROCK_EXPECTED_FILES = [
     "/var/run/dbus",
 ]
 
+GANESHA_VERSIONS = {
+    # Longhorn version: Ganesha version
+    "v1.6.2": "V5.7",
+    "v1.7.0": "V5.9",
+}
 
-@pytest.mark.parametrize("image_version", ["v1.7.0"])
+
+@pytest.mark.parametrize("image_version", ["v1.6.2", "v1.7.0"])
 def test_longhorn_share_manager_rock(image_version):
     """Test longhorn-share-manager rock."""
     rock = env_util.get_build_meta_info_for_rock_version(
@@ -44,4 +50,5 @@ def test_longhorn_share_manager_rock(image_version):
     assert "longhorn-share-manager - A new cli application" in process.stdout
 
     process = docker_util.run_in_docker(image, ["ganesha.nfsd", "-v"])
-    assert "NFS-Ganesha Release = V5.9" in process.stdout
+    ganesha_version = GANESHA_VERSIONS[image_version]
+    assert f"NFS-Ganesha Release = {ganesha_version}" in process.stdout
