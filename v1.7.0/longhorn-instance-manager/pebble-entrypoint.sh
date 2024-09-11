@@ -19,4 +19,4 @@ if [ $# -eq 0 ]; then
 fi
 
 # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L175
-exec tini -- $TINI_ARGS
+exec /tini -- $TINI_ARGS
