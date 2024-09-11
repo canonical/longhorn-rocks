@@ -61,6 +61,22 @@ parts:
       - CGO_ENABLED: 0
       - VERSION: $CRAFT_PROJECT_VERSION
     override-build: |
+      # NOTE(claudiub): The original longhorn-manager image doesn't have an entrypoint, only a CMD.
+      # This means that when the image is launched, it will run the CMD directly. Basically, the
+      # CMD is the ENTRYPOINT (binary + arguments). That works fine with the current deployments.
+      #
+      # longhorn-manager will create the daemonset.apps/longhorn-csi-plugin, which will
+      # have a longhorn-manager container, which doesn't override the entrypoint, only the
+      # args (aka CMD).
+      # But in our rock scenario, Pebble is the entrypoint, which will get those arguments and pass them
+      # on onto the service defined above. This results in an invalid command being run, something like:
+      # longhorn-manager -d daemon longhorn-manager -d csi --nodeid=...
+      #
+      # This patch updates the mentioned container args to command, overriding the Pebble entrypoint,
+      # avoiding this problem.
+      cp $CRAFT_PROJECT_DIR/longhorn-csi-plugin-command.patch ./
+      git apply -v longhorn-csi-plugin-command.patch
+
       # https://github.com/longhorn/longhorn-manager/blob/v1.7.0/package/Dockerfile#L15
       mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin/
       cp package/launch-manager package/nsmounter $CRAFT_PART_INSTALL/usr/local/sbin/
