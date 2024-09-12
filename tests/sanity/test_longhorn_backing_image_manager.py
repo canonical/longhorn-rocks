@@ -15,7 +15,7 @@ LOG.addHandler(logging.StreamHandler(sys.stdout))
 
 
 IMAGE_NAME = "backing-image-manager"
-IMAGE_VERSIONS = ["v1.7.0"]
+IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
 
 
 @pytest.mark.abort_on_fail
