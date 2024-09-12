@@ -13,10 +13,10 @@ ldconfig
 
 TINI_ARGS="$@"
 if [ $# -eq 0 ]; then
-    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L177
+    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L146
     # https://github.com/longhorn/longhorn-instance-manager/pull/664
     TINI_ARGS="longhorn-instance-manager"
 fi
 
-# https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L175
+# https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L144
 exec /tini -- $TINI_ARGS

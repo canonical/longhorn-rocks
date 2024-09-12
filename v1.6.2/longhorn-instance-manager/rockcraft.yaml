@@ -2,23 +2,23 @@
 # See LICENSE file for licensing details.
 
 # Rockcraft definition for Longhorn Instance Manager image:
-# longhornio/longhorn-instance-manager:v1.7.0
+# longhornio/longhorn-instance-manager:v1.6.2
 
 name: longhorn-instance-manager
 summary: Rock containing Longhorn Instance Manager component.
 description: |
   Rock containing Longhorn Instance Manager component: https://github.com/longhorn/longhorn-instance-manager
-  Aims to replicate the upstream official image: longhornio/longhorn-instance-manager:v1.7.0
+  Aims to replicate the upstream official image: longhornio/longhorn-instance-manager:v1.6.2
 license: Apache-2.0
 
-version: "v1.7.0"
+version: "v1.6.2"
 
 # NOTE(aznashwan): the base for the Instance Manager image is the Suse Linux Enterprise
-# Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
-# and is thus most comparable to 24.04:
-# https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L44
-base: ubuntu@24.04
-build-base: ubuntu@24.04
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 5.14,
+# and is thus most comparable to 22.04:
+# https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L92
+base: ubuntu@22.04
+build-base: ubuntu@22.04
 platforms:
   amd64:
 
@@ -44,12 +44,12 @@ parts:
   # NOTE(aznashwan): the longhorn binary is built within a Docker container
   # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
   # The setup steps for the build container are contained within this Dockerfile:
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper
   setup-build-env:
     plugin: nil
 
     build-packages:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L24-L29
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L23-L27
       - cmake
       - wget
       - curl
@@ -58,7 +58,7 @@ parts:
       - libglib2.0-dev          # libglib-2_0-0
       - libkmod-dev             # libkmod-devel
       - libnl-3-dev             # libnl3-devel
-      - linux-headers-6.8.0-41  # linux-glibc-devel
+      - linux-headers-5.15.0-25 # linux-glibc-devel
       - pkg-config
       - psmisc
       - fuse
@@ -74,19 +74,12 @@ parts:
       - libdevmapper1.02.1      # libdevmapper1_03
       - gcc
       - g++
-      # The following are packages used for building supporting libs in a
-      # separate multi-stage build before copying them to the final image:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L54
-      - python3                 # python311
-      - python3-pip             # python311-pip
-      - patchelf
-      - libfuse3-3              # fuse3-devel
 
     override-build: |
       set -eux -o pipefail
 
       # NOTE(aznashwan): pull and install libqcow2 for building the engine deps:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L36-L41
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L43-L51
       curl -sSfL https://s3-us-west-1.amazonaws.com/rancher-longhorn/libqcow-alpha-20181117.tar.gz | tar xvzf - -C /usr/src
 
       cd /usr/src/libqcow-20181117
@@ -105,11 +98,11 @@ parts:
 
     source-type: git
     source: https://github.com/longhorn/longhorn-instance-manager
-    source-tag: v1.7.0
+    source-tag: v1.6.2
     source-depth: 1
 
     build-snaps:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L1
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L40
       - go/1.22/stable
 
     override-build: |
@@ -119,7 +112,7 @@ parts:
 
       bash ./scripts/build
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165-L166
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L136
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
       cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
 
@@ -130,18 +123,23 @@ parts:
       cat package/instance-manager >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
       chmod +x $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L18-L26
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L20-L25
   build-go-spdk-helper:
     plugin: nil
     after: ["setup-build-env"]
 
     source-type: git
     source: https://github.com/longhorn/go-spdk-helper
+    # NOTE(aznashwan): the original v1.6.2 version of the Dockerfile
+    # did not bother to pin the go-spdk-helper version...
+    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L21
+    # This commit ID is the one used in the v1.7.0 image:
+    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L20
     source-commit: 6a324e95979662be592bfda0e867d2678ecbc756
     source-depth: 1
 
     build-snaps:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L1
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L1
       - go/1.22/stable
 
     override-build: |
@@ -155,8 +153,8 @@ parts:
       chmod 755 $CRAFT_PART_INSTALL/usr/local/bin/go-spdk-helper
 
   # Pulls a pre-built GRPC health probe executable into the final ROCK.
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L28-L30
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L139
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L89-L90
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L113
   fetch-grpc-health-probe:
     plugin: nil
     after: ["setup-build-env"]
@@ -164,7 +162,7 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      VERSION="v0.4.28"
+      VERSION="v0.4.24"
       ARCH="$CRAFT_ARCH_BUILD_FOR"
 
       URL="https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${VERSION}/grpc_health_probe-linux-${ARCH}"
@@ -173,7 +171,7 @@ parts:
       curl -sSfL $URL -o $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
       chmod +x $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L56-L62
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L28-L34
   build-liblonghorn:
     plugin: nil
     after: ["setup-build-env"]
@@ -190,7 +188,7 @@ parts:
       make
       make install
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L64-L70
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L37-L43
   build-tgt:
     plugin: nil
     after: ["setup-build-env"]
@@ -207,18 +205,18 @@ parts:
       make
       make install
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L151-L157
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L122-L128
       mkdir -p $CRAFT_PART_INSTALL/usr/sbin
       cp /usr/sbin/{tgt-admin,tgt-setup-lun,tgtadm,tgtd,tgtimg} $CRAFT_PART_INSTALL/usr/sbin
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L72-L93
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L47-L64
   build-spdk:
     plugin: nil
     after: ["setup-build-env"]
 
     source-type: git
     source: https://github.com/longhorn/spdk
-    source-commit: a6478cde7e0cff2fb09992868308a7387aa5202a
+    source-commit: 086836c8d1ee2d622c86965dfb0245d966420309
 
     override-build: |
       set -eux -o pipefail
@@ -227,9 +225,8 @@ parts:
 
       git submodule update --init
 
-      sed -i.bak "s/pip3 install/pip3 install --break-system-packages/g" ./scripts/pkgdep/ubuntu.sh
       bash ./scripts/pkgdep.sh
-      pip3 install --break-system-packages -r ./scripts/pkgdep/requirements.txt
+      pip3 install -r ./scripts/pkgdep/requirements.txt
 
       TARGET_ARCH="unsupported"
       DPDKBUILD_FLAGS=""
@@ -247,11 +244,11 @@ parts:
       DPDKBUILD_FLAGS="$DPDKBUILD_FLAGS" make -j$(nproc)
       make install
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L143-L145
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L114
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
       cp /usr/local/bin/spdk_* $CRAFT_PART_INSTALL/usr/local/bin
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L95-L104
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L67-L76
   build-json-c:
     plugin: nil
     after: ["setup-build-env"]
@@ -273,20 +270,20 @@ parts:
       make
       make install
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L130-L132
       mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
       cp --preserve=links /usr/local/lib/libjson-c* $CRAFT_PART_INSTALL/usr/local/lib/
 
       ldconfig -p
 
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L106-L113
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L78-L86
   build-nvme-cli:
     plugin: nil
     after: ["setup-build-env"]
 
     source-type: git
     source: https://github.com/linux-nvme/nvme-cli
-    source-commit: b340fd7dcf1aef76f8d46ab28bef3c170d310887
+    source-commit: dcdad6f5d70ffb2fa151f229db048180671eb1fe
     source-depth: 1
 
     build-packages:
@@ -301,18 +298,18 @@ parts:
       meson compile -C .build
       meson install -C .build
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L147-L149
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L118-L120
       mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin
       cp /usr/local/sbin/nvme $CRAFT_PART_INSTALL/usr/local/sbin
 
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L130-L132
       mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
       cp --preserve=links /usr/local/lib/*/libnvme*.so $CRAFT_PART_INSTALL/usr/local/lib/
 
       ldconfig -p
 
   # Pulls a pre-built binary release of the `tini` init system.
-  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L173
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L141-L143
   fetch-tini-init:
     plugin: nil
     after: ["setup-build-env"]
@@ -331,7 +328,7 @@ parts:
   prep-final-image:
     plugin: nil
 
-    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L128-L129
+    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L103-L105
     stage-packages:
       - nfs-common        # nfs-client
       - nfs4-acl-tools

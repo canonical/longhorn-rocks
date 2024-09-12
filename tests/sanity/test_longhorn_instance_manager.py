@@ -15,7 +15,7 @@ LOG.addHandler(logging.StreamHandler(sys.stdout))
 
 
 IMAGE_NAME = "longhorn-instance-manager"
-IMAGE_VERSIONS = ["v1.7.0"]
+IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
 
 
 @pytest.mark.abort_on_fail
@@ -80,5 +80,11 @@ def test_check_rock_image_contents(image_version):
     # to re-index some libs `nvme` dynamically links to:
     cmd = "ldconfig && nvme version"
     process = docker_util.run_in_docker(rock_image, ["bash", "-c", cmd])
-    assert "nvme version 2.9.1" in process.stdout
-    assert "libnvme version 1.9" in process.stdout
+    nvme_cli_and_lib_ver_map = {
+        "v1.7.0": ("2.9.1", "1.9"),
+        "v1.6.2": ("2.7.1", "1.7"),
+    }
+    LOG.info(f"`nvme version` output: {process.stdout}")
+    cliv, libv = nvme_cli_and_lib_ver_map[image_version]
+    assert f"nvme version {cliv}" in process.stdout
+    assert f"libnvme version {libv}" in process.stdout
