@@ -263,3 +263,4 @@ parts:
       - iproute2
       - qemu-utils
       - e2fsprogs
+      - jq
