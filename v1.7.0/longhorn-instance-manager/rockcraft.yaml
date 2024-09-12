@@ -122,7 +122,13 @@ parts:
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165-L166
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
       cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
-      cp package/instance-manager $CRAFT_PART_INSTALL/usr/local/bin
+
+      # NOTE(aznashwan): the original script is lacking any error
+      # handling/debugging so we add it ourselves:
+      echo '#!/bin/bash' >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      echo 'set -eux -o pipefail' >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      cat package/instance-manager >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      chmod +x $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
 
   # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L18-L26
   build-go-spdk-helper:
@@ -260,7 +266,7 @@ parts:
 
       cd $CRAFT_PART_SRC
 
-      mkdir .build
+      mkdir -p .build
       cd .build
 
       cmake ../
@@ -269,7 +275,7 @@ parts:
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
       mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
-      cp /usr/local/lib/libjson-c* $CRAFT_PART_INSTALL/usr/local/lib/
+      cp --preserve=links /usr/local/lib/libjson-c* $CRAFT_PART_INSTALL/usr/local/lib/
 
       ldconfig -p
 
@@ -301,7 +307,7 @@ parts:
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
       mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
-      cp /usr/local/lib/*/libnvme*.so $CRAFT_PART_INSTALL/usr/local/lib/
+      cp --preserve=links /usr/local/lib/*/libnvme*.so $CRAFT_PART_INSTALL/usr/local/lib/
 
       ldconfig -p
 
@@ -363,4 +369,15 @@ parts:
       cp $CRAFT_PROJECT_DIR/pebble-entrypoint.sh $CRAFT_PART_INSTALL/pebble-entrypoint.sh
       chmod +x $CRAFT_PART_INSTALL/pebble-entrypoint.sh
 
+      # NOTE(aznashwan): the entrypoint helper script included in the upstream
+      # image rbind's /lib/modules so we must ensure the directory exists:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/master/package/instance-manager#L24
+      mkdir -p $CRAFT_PART_INSTALL/lib/modules
 
+      # NOTE(aznashwan): in the original image based on SLES, there is no
+      # `netcat` package, and `zypper -n` instead defaults to the first
+      # package which provides the `netcat` capability, which is the OpenBSD
+      # version of netcat. The `netcat-openbsd` package on Ubuntu only lacks
+      # the `nc` symlink, which we create manually instead:
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      ln -s /bin/nc.openbsd $CRAFT_PART_INSTALL/usr/bin/nc
