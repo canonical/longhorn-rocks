@@ -1,0 +1,265 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Longhorn engine image:
+# longhornio/longhorn-engine:v1.7.0
+
+name: longhorn-engine
+summary: Rock containing Longhorn engine component.
+description: |
+  Rock containing Longhorn engine component: https://github.com/longhorn/longhorn-engine
+  Aims to replicate the upstream official image: longhornio/longhorn-engine:v1.7.0
+license: Apache-2.0
+
+version: "v1.7.0"
+
+# NOTE(aznashwan): the base for the engine image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L1
+base: ubuntu@24.04
+
+build-base: ubuntu@24.04
+platforms:
+  amd64:
+
+
+services:
+  longhorn-engine:
+    startup: enabled
+    override: replace
+
+    # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L68-L70
+    command: /tini -- [ longhorn ]
+
+parts:
+
+  # NOTE(aznashwan): the longhorn binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper
+  setup-build-env:
+    plugin: nil
+
+    build-packages:
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L30-L36
+      - cmake
+      - curl
+      - git
+      - less
+      - file
+      - gcc
+      - python3
+      - python3-pip
+      - python3-dev
+      - libkmod-dev
+      - libnl-3-dev
+      - linux-headers-6.8.0-41
+      - pkg-config
+      - psmisc
+      - fuse
+      - librdmacm-dev
+      - rdmacm-utils
+      - libibverbs-dev
+      - xsltproc
+      - docbook-xsl
+      - ldp-docbook-xsl
+      - perl
+      - libconfig-general-perl
+      - libaio-dev
+      - libc6-dev
+      - sg3-utils
+      - iptables
+      - libltdl7
+      - libdevmapper-dev
+      - iproute2
+      - jq
+      - unzip
+      - zlib1g-dev
+      - rdma-core
+      - g++
+      - libopeniscsiusr-dev
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L25-L27
+      - autoconf
+      - libtool
+      - libunwind-dev
+
+    override-build: |
+      set -eux -o pipefail
+
+      # NOTE(aznashwan): pull and install libqcow2 for building the engine:
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L48-L53
+      curl -sSfL https://s3-us-west-1.amazonaws.com/rancher-longhorn/libqcow-alpha-20181117.tar.gz | tar xvzf - -C /usr/src
+
+      cd /usr/src/libqcow-20181117
+      ./configure
+      make -j$(nproc)
+      make install
+
+      ldconfig
+
+      # NOTE(aznashwan): pull and install liblonghorn
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L15-L22
+      LIBLONGHORN_COMMIT_ID="53d1c063b95efc8d949b095bd4bf04637230265f"
+      cd /usr/src
+      git clone https://github.com/rancher/liblonghorn.git
+      cd liblonghorn
+      git checkout ${LIBLONGHORN_COMMIT_ID}
+      make
+      make install
+
+  # NOTE(aznashwan): the Makefile targets are just the scripts found in the
+  # scripts/ directory which are executed within the Dapper build container:
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Makefile#L1
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Makefile#L10-L11
+  build-lonhorn-engine:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/longhorn-engine
+    source-tag: v1.7.0
+    source-depth: 1
+
+    build-snaps:
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L1
+      - go/1.22/stable
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      bash ./scripts/build
+
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L59
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp $CRAFT_PART_SRC/bin/longhorn $CRAFT_PART_INSTALL/usr/local/bin
+
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L62
+      cp package/launch-simple-longhorn $CRAFT_PART_INSTALL/usr/local/bin
+      cp package/engine-manager $CRAFT_PART_INSTALL/usr/local/bin
+      cp package/launch-simple-file $CRAFT_PART_INSTALL/usr/local/bin
+
+  # NOTE(aznashwan): the original engine image includes a Longhorn Instance Manager
+  # binary which is built on the spot within the Dapper build container:
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L60
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L93-L98
+  build-longhorn-instance-manager:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/longhorn-engine
+    # NOTE(aznashwan): the build steps in the Dapper file clone the
+    # longhorn-instance-manager's tip, which could potentially lead
+    # to compatibility issues so we pin its version too:
+    # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Dockerfile.dapper#L95
+    source-tag: v1.7.0
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      go build \
+        -tags netgo -ldflags "-linkmode external -extldflags -static" \
+        -o ./longhorn-instance-manager
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp ./longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
+
+  build-liblonghorn:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/rancher/liblonghorn.git
+    source-commit: 53d1c063b95efc8d949b095bd4bf04637230265f
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L15-L22
+      cd $CRAFT_PART_SRC
+      make
+      make install
+
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L24-L31
+  build-tgt:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/rancher/tgt.git
+    source-commit: 3a8bc4823b5390e046f7aa8231ed262c0365c42c
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+      make
+      make install
+
+      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L52-L56
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp /usr/sbin/{tgt-admin,tgt-setup-lun,tgtadm,tgtd,tgtimg} $CRAFT_PART_INSTALL/usr/local/bin
+
+  # Pulls a pre-built GRPC health probe executable into the final ROCK.
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L33-L35
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L51
+  fetch-grpc-health-probe:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    override-build: |
+      set -eux -o pipefail
+
+      VERSION="v0.4.28"
+      ARCH="$CRAFT_TARGET_ARCH"
+
+      URL="https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${VERSION}/grpc_health_probe-linux-${ARCH}"
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      curl -sSfL $URL -o $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
+      chmod +x $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
+
+  # Pulls a pre-built binary release of the `tini` init system.
+  # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L64-L67
+  fetch-tini-init:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    override-build: |
+      set -eux -o pipefail
+
+      TINI_VERSION="v0.19.0"
+      ARCH="$CRAFT_TARGET_ARCH"
+
+      URL="https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}"
+
+      curl -sSfL $URL -o $CRAFT_PART_INSTALL/tini
+      chmod +x $CRAFT_PART_INSTALL/tini
+
+  prep-final-image:
+    plugin: nil
+
+    # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L45-L46
+    stage-packages:
+      - nfs-common
+      - nfs4-acl-tools
+      - cifs-utils
+      - libaio-dev
+      - sg3-utils
+      # NOTE(aznashwan): original image install 'iputils' SLE package
+      # which contains the utilities from all the below packages:
+      - iputils-arping
+      - iputils-ping
+      - iputils-tracepath
+      - iputils-clockdiff
+      - iproute2
+      - qemu-utils
+      - e2fsprogs

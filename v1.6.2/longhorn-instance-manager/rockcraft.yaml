@@ -1,0 +1,383 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Longhorn Instance Manager image:
+# longhornio/longhorn-instance-manager:v1.7.0
+
+name: longhorn-instance-manager
+summary: Rock containing Longhorn Instance Manager component.
+description: |
+  Rock containing Longhorn Instance Manager component: https://github.com/longhorn/longhorn-instance-manager
+  Aims to replicate the upstream official image: longhornio/longhorn-instance-manager:v1.7.0
+license: Apache-2.0
+
+version: "v1.7.0"
+
+# NOTE(aznashwan): the base for the Instance Manager image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L44
+base: ubuntu@24.04
+build-base: ubuntu@24.04
+platforms:
+  amd64:
+
+environment:
+  LD_LIBRARY_PATH: /usr/local/lib
+
+services:
+  longhorn-instance-manager:
+    summary: "longhorn-instance-manager service"
+    startup: enabled
+    override: replace
+
+    # NOTE(aznashwan): the entrypoint script we add to the rock simply runs
+    # `ldconfig` before `exec`-ing the `tini` init service with the args:
+    command: bash /pebble-entrypoint.sh [ longhorn-instance-manager ]
+
+    on-success: shutdown
+    on-failure: shutdown
+
+entrypoint-service: longhorn-instance-manager
+
+parts:
+  # NOTE(aznashwan): the longhorn binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper
+  setup-build-env:
+    plugin: nil
+
+    build-packages:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L24-L29
+      - cmake
+      - wget
+      - curl
+      - git
+      - file
+      - libglib2.0-dev          # libglib-2_0-0
+      - libkmod-dev             # libkmod-devel
+      - libnl-3-dev             # libnl3-devel
+      - linux-headers-6.8.0-41  # linux-glibc-devel
+      - pkg-config
+      - psmisc
+      - fuse
+      - zlib1g-dev              # zlib-devel
+      - rdma-core               # rdma-core-devel
+      - librdmacm-dev
+      - xsltproc
+      - docbook-xsl
+      - ldp-docbook-xsl
+      - libaio-dev              # libaio-devel
+      - libc6-dev               # glibc-devel, glibc-devel-static
+      - libltdl7
+      - libdevmapper1.02.1      # libdevmapper1_03
+      - gcc
+      - g++
+      # The following are packages used for building supporting libs in a
+      # separate multi-stage build before copying them to the final image:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L54
+      - python3                 # python311
+      - python3-pip             # python311-pip
+      - patchelf
+      - libfuse3-3              # fuse3-devel
+
+    override-build: |
+      set -eux -o pipefail
+
+      # NOTE(aznashwan): pull and install libqcow2 for building the engine deps:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L36-L41
+      curl -sSfL https://s3-us-west-1.amazonaws.com/rancher-longhorn/libqcow-alpha-20181117.tar.gz | tar xvzf - -C /usr/src
+
+      cd /usr/src/libqcow-20181117
+      ./configure
+      make -j$(nproc)
+      make install
+
+      ldconfig -p
+
+  # The Makefile targets are just the scripts found in the scripts/ directory which
+  # are executed within the Dapper build container:
+  # https://github.com/longhorn/longhorn-instance-manager/blob/master/Makefile#L10-L11
+  build-longhorn-instance-manager:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/longhorn-instance-manager
+    source-tag: v1.7.0
+    source-depth: 1
+
+    build-snaps:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L1
+      - go/1.22/stable
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      bash ./scripts/build
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165-L166
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
+
+      # NOTE(aznashwan): the original script is lacking any error
+      # handling/debugging so we add it ourselves:
+      echo '#!/bin/bash' >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      echo 'set -eux -o pipefail' >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      cat package/instance-manager >> $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+      chmod +x $CRAFT_PART_INSTALL/usr/local/bin/instance-manager
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L18-L26
+  build-go-spdk-helper:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/go-spdk-helper
+    source-commit: 6a324e95979662be592bfda0e867d2678ecbc756
+    source-depth: 1
+
+    build-snaps:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/Dockerfile.dapper#L1
+      - go/1.22/stable
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+      go build
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp go-spdk-helper $CRAFT_PART_INSTALL/usr/local/bin/go-spdk-helper
+      chmod 755 $CRAFT_PART_INSTALL/usr/local/bin/go-spdk-helper
+
+  # Pulls a pre-built GRPC health probe executable into the final ROCK.
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L28-L30
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L139
+  fetch-grpc-health-probe:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    override-build: |
+      set -eux -o pipefail
+
+      VERSION="v0.4.28"
+      ARCH="$CRAFT_ARCH_BUILD_FOR"
+
+      URL="https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/${VERSION}/grpc_health_probe-linux-${ARCH}"
+
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      curl -sSfL $URL -o $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
+      chmod +x $CRAFT_PART_INSTALL/usr/local/bin/grpc_health_probe
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L56-L62
+  build-liblonghorn:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/rancher/liblonghorn
+    source-commit: 53d1c063b95efc8d949b095bd4bf04637230265f
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+      make
+      make install
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L64-L70
+  build-tgt:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/rancher/tgt.git
+    source-commit: 3a8bc4823b5390e046f7aa8231ed262c0365c42c
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+      make
+      make install
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L151-L157
+      mkdir -p $CRAFT_PART_INSTALL/usr/sbin
+      cp /usr/sbin/{tgt-admin,tgt-setup-lun,tgtadm,tgtd,tgtimg} $CRAFT_PART_INSTALL/usr/sbin
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L72-L93
+  build-spdk:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/spdk
+    source-commit: a6478cde7e0cff2fb09992868308a7387aa5202a
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      git submodule update --init
+
+      sed -i.bak "s/pip3 install/pip3 install --break-system-packages/g" ./scripts/pkgdep/ubuntu.sh
+      bash ./scripts/pkgdep.sh
+      pip3 install --break-system-packages -r ./scripts/pkgdep/requirements.txt
+
+      TARGET_ARCH="unsupported"
+      DPDKBUILD_FLAGS=""
+      if [ $CRAFT_ARCH_BUILD_FOR = "amd64" ]; then
+        TARGET_ARCH="nehalem"
+      elif [ $CRAFT_ARCH_BUILD_FOR = "arm64" ]; then
+        TARGET_ARCH="native"
+        DPDKBUILD_FLAGS="-Dplatform=generic"
+      else
+        echo "Unsupported architecture: ${CRAFT_ARCH_BUILD_FOR}"
+        exit 1
+      fi
+
+      ./configure --target-arch=$TARGET_ARCH --disable-tests --disable-unit-tests --disable-examples
+      DPDKBUILD_FLAGS="$DPDKBUILD_FLAGS" make -j$(nproc)
+      make install
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L143-L145
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp /usr/local/bin/spdk_* $CRAFT_PART_INSTALL/usr/local/bin
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L95-L104
+  build-json-c:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/json-c/json-c
+    source-commit: b4c371fa0cbc4dcbaccc359ce9e957a22988fb34
+    source-depth: 1
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      mkdir -p .build
+      cd .build
+
+      cmake ../
+      make
+      make install
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
+      cp --preserve=links /usr/local/lib/libjson-c* $CRAFT_PART_INSTALL/usr/local/lib/
+
+      ldconfig -p
+
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L106-L113
+  build-nvme-cli:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/linux-nvme/nvme-cli
+    source-commit: b340fd7dcf1aef76f8d46ab28bef3c170d310887
+    source-depth: 1
+
+    build-packages:
+      - meson
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      meson setup --force-fallback-for=libnvme .build
+      meson compile -C .build
+      meson install -C .build
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L147-L149
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin
+      cp /usr/local/sbin/nvme $CRAFT_PART_INSTALL/usr/local/sbin
+
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L159-L161
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/lib
+      cp --preserve=links /usr/local/lib/*/libnvme*.so $CRAFT_PART_INSTALL/usr/local/lib/
+
+      ldconfig -p
+
+  # Pulls a pre-built binary release of the `tini` init system.
+  # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L173
+  fetch-tini-init:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    override-build: |
+      set -eux -o pipefail
+
+      TINI_VERSION="v0.19.0"
+      ARCH="$CRAFT_ARCH_BUILD_FOR"
+
+      URL="https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}"
+
+      curl -sSfL $URL -o $CRAFT_PART_INSTALL/tini
+      chmod +x $CRAFT_PART_INSTALL/tini
+
+  prep-final-image:
+    plugin: nil
+
+    # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L128-L129
+    stage-packages:
+      - nfs-common        # nfs-client
+      - nfs4-acl-tools
+      - cifs-utils
+      - sg3-utils         # sg3_utils
+      - iproute2
+      - qemu-utils        # qemu-utils, for `qemu-img` binary
+      - e2fsprogs
+      - xfsprogs
+      - util-linux        # util-linux-systemd
+      - python3           # python311-base
+      - libcmocka-dev     # libcmocka-devel
+      # NOTE(aznashwan): the below 'dm*' packages are constituents of the
+      # 'device-mapper' SLES package which aggregates the following:
+      - dmsetup
+      - dmeventd
+      - netcat-openbsd    # netcat
+      - kmod
+      - jq
+      - util-linux
+      - procps
+      - libfuse3-3        # fuse3-devel
+      - awk
+      # NOTE(aznashwan): although not explicitly installed in any of the
+      # upstream build procedures, some of the secondary CLI tools
+      # (e.g. nvmecli) require libncurses:
+      - libncurses-dev
+
+    override-build: |
+      set -eux -o pipefail
+
+      mkdir -p $CRAFT_PART_INSTALL/etc/ld.so.conf.d
+      echo /usr/local/lib > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/99_usr_local_lib.conf
+
+      cp $CRAFT_PROJECT_DIR/pebble-entrypoint.sh $CRAFT_PART_INSTALL/pebble-entrypoint.sh
+      chmod +x $CRAFT_PART_INSTALL/pebble-entrypoint.sh
+
+      # NOTE(aznashwan): the entrypoint helper script included in the upstream
+      # image rbind's /lib/modules so we must ensure the directory exists:
+      # https://github.com/longhorn/longhorn-instance-manager/blob/master/package/instance-manager#L24
+      mkdir -p $CRAFT_PART_INSTALL/lib/modules
+
+      # NOTE(aznashwan): in the original image based on SLES, there is no
+      # `netcat` package, and `zypper -n` instead defaults to the first
+      # package which provides the `netcat` capability, which is the OpenBSD
+      # version of netcat. The `netcat-openbsd` package on Ubuntu only lacks
+      # the `nc` symlink, which we create manually instead:
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      ln -s /bin/nc.openbsd $CRAFT_PART_INSTALL/usr/bin/nc
