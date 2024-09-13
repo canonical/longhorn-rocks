@@ -6,7 +6,6 @@ import pytest
 from k8s_test_harness.util import docker_util, env_util
 
 ROCK_EXPECTED_FILES = [
-    "/tmp/common",
     "/usr/bin/entrypoint.sh",
     "/usr/bin/collector-harvester",
     "/usr/bin/collector-k3os",
@@ -17,7 +16,7 @@ ROCK_EXPECTED_FILES = [
 ]
 
 
-@pytest.mark.parametrize("image_version", ["v0.0.41"])
+@pytest.mark.parametrize("image_version", ["v0.0.37", "v0.0.41"])
 def test_support_bundle_kit_rock(image_version):
     """Test support-bundle-kit rock."""
     rock = env_util.get_build_meta_info_for_rock_version(
@@ -26,6 +25,9 @@ def test_support_bundle_kit_rock(image_version):
     image = rock.image
 
     # check rock filesystem.
+    expected_files = ROCK_EXPECTED_FILES
+    if image_version != "v0.0.37":
+        expected_files += ["/tmp/common"]
     docker_util.ensure_image_contains_paths(image, ROCK_EXPECTED_FILES)
 
     # check expected executables.
@@ -37,4 +39,4 @@ def test_support_bundle_kit_rock(image_version):
     assert "yq is a portable command-line data file processor" in process.stdout
 
     process = docker_util.run_in_docker(image, ["support-bundle-kit", "version"])
-    assert "v0.0.41" in process.stdout
+    assert image_version in process.stdout
