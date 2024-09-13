@@ -1,0 +1,96 @@
+diff --git a/src/clnt_raw.c b/src/clnt_raw.c
+index 781cfa62..0b768c01 100644
+--- a/src/clnt_raw.c
++++ b/src/clnt_raw.c
+@@ -40,7 +40,6 @@
+ #include "config.h"
+ #include <pthread.h>
+ #include <reentrant.h>
+-#include <assert.h>
+ #include <err.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+diff --git a/src/clnt_vc.c b/src/clnt_vc.c
+index 57d48af7..9c185858 100644
+--- a/src/clnt_vc.c
++++ b/src/clnt_vc.c
+@@ -55,7 +55,6 @@
+ #include <sys/socket.h>
+ #include <misc/socket.h>
+ #include <arpa/inet.h>
+-#include <assert.h>
+ #include <err.h>
+ #include <errno.h>
+ #include <netdb.h>
+diff --git a/src/rbtree_x.c b/src/rbtree_x.c
+index 585af809..5bb05822 100644
+--- a/src/rbtree_x.c
++++ b/src/rbtree_x.c
+@@ -31,7 +31,6 @@
+ #include <err.h>
+ #endif
+ #include <stdint.h>
+-#include <assert.h>
+ #include <errno.h>
+ #include <rpc/types.h>
+ #include <reentrant.h>
+diff --git a/src/svc_ioq.c b/src/svc_ioq.c
+index 1ebcfb06..2d7e18af 100644
+--- a/src/svc_ioq.c
++++ b/src/svc_ioq.c
+@@ -37,7 +37,6 @@
+ #include <netinet/in.h>
+ #include <netinet/tcp.h>
+ 
+-#include <assert.h>
+ #include <err.h>
+ #include <errno.h>
+ #include <fcntl.h>
+diff --git a/src/svc_rqst.c b/src/svc_rqst.c
+index fe8443c9..86bb4d86 100644
+--- a/src/svc_rqst.c
++++ b/src/svc_rqst.c
+@@ -28,7 +28,6 @@
+ #include <sys/types.h>
+ #include <sys/poll.h>
+ #include <stdint.h>
+-#include <assert.h>
+ #include <err.h>
+ #include <errno.h>
+ #include <unistd.h>
+diff --git a/src/svc_xprt.c b/src/svc_xprt.c
+index 4ea9ca02..762d3eb4 100644
+--- a/src/svc_xprt.c
++++ b/src/svc_xprt.c
+@@ -29,7 +29,6 @@
+ #include <sys/types.h>
+ #include <sys/poll.h>
+ #include <stdint.h>
+-#include <assert.h>
+ #include <err.h>
+ #include <errno.h>
+ #include <unistd.h>
+diff --git a/src/work_pool.c b/src/work_pool.c
+index 5d69f557..0ff85008 100644
+--- a/src/work_pool.c
++++ b/src/work_pool.c
+@@ -50,6 +50,7 @@
+ #include <sys/types.h>
+ #include <misc/abstract_atomic.h>
+ #include <misc/portable.h>
++#include <assert.h>
+ #include <stddef.h>
+ #include <stdlib.h>
+ #include <string.h>
+diff --git a/src/xdr_rdma.c b/src/xdr_rdma.c
+index e7f4dfe5..e32dde01 100644
+--- a/src/xdr_rdma.c
++++ b/src/xdr_rdma.c
+@@ -35,7 +35,6 @@
+ 
+ #include <netinet/in.h>
+ 
+-#include <assert.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <errno.h>
