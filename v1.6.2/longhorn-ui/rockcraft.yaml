@@ -1,0 +1,107 @@
+# Copyright 2024 Canonical, Ltd.
+# See LICENSE file for licensing details
+
+# Rockcraft definition for Longhorn UI image:
+# longhornio/longhorn-ui:v1.6.2
+
+# Based on: https://github.com/longhorn/longhorn-ui/blob/v1.6.2/Dockerfile
+name: longhorn-ui
+summary: longhorn-ui rock
+description: |
+    A rock containing Longhorn UI component: https://github.com/longhorn/longhorn-ui
+
+    Longhorn is a distributed block storage system for Kubernetes. Longhorn is cloud-native
+    storage built using Kubernetes and container primitives.
+
+    Aims to replicate the upstream official image: longhornio/longhorn-ui:v1.6.2
+license: Apache-2.0
+
+version: "v1.6.2"
+
+# NOTE(aznashwan): the base for the engine image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/longhorn-ui/blob/v1.6.2/Dockerfile#L13
+base: ubuntu@24.04
+build-base: ubuntu@24.04
+
+platforms:
+  amd64:
+
+environment:
+  APP_VERSION: v1.6.2
+  LONGHORN_MANAGER_IP: http://localhost:9500
+  LONGHORN_UI_PORT: 8000
+
+# Services to be loaded by the Pebble entrypoint.
+services:
+  longhorn-ui:
+    summary: "longhorn-ui service"
+    override: replace
+    startup: enabled
+    user: nginx
+    group: nginx
+    command: "/entrypoint.sh"
+    on-success: shutdown
+    on-failure: shutdown
+
+parts:
+  nginx-user:
+    plugin: nil
+    overlay-script: |
+      groupadd -R $CRAFT_OVERLAY -g 499 nginx
+      useradd -R $CRAFT_OVERLAY -g 499 -u 499 -M -r nginx
+
+  add-entrypoint:
+    after: [nginx-user]
+    plugin: dump
+    source: .
+    source-type: local
+    stage:
+      - entrypoint.sh
+    override-stage: |
+      craftctl default
+      chown -R 499 "${CRAFT_PART_INSTALL}/entrypoint.sh"
+
+  add-dependencies:
+    after: [nginx-user]
+    plugin: nil
+    stage-packages:
+      - curl
+      - libxml2
+      - gettext
+      - nginx
+    override-build: |
+      mkdir -p "${CRAFT_PART_INSTALL}/var/config/nginx" \
+        "${CRAFT_PART_INSTALL}/var/lib/nginx" \
+        "${CRAFT_PART_INSTALL}/var/log/nginx" \
+        "${CRAFT_PART_INSTALL}/var/run"
+      touch "${CRAFT_PART_INSTALL}/var/run/nginx.pid"
+      chown -R 499 "${CRAFT_PART_INSTALL}/var/config/nginx" \
+        "${CRAFT_PART_INSTALL}/var/lib/nginx" \
+        "${CRAFT_PART_INSTALL}/var/log/nginx" \
+        "${CRAFT_PART_INSTALL}/var/run/nginx.pid"
+
+  build-longhorn-ui:
+    plugin: nil
+    source: https://github.com/longhorn/longhorn-ui
+    source-type: git
+    source-tag: $CRAFT_PROJECT_VERSION
+    source-depth: 1
+    build-packages:
+      - gettext-base
+    build-snaps:
+      - node/16/stable
+    build-environment:
+      - VERSION: $CRAFT_PROJECT_VERSION
+    override-build: |
+      npm ci
+      # Inject the version before building.
+      sed -i -e "s/\${VERSION}/${VERSION}/" src/utils/config.js
+      npm run build
+
+      mkdir -p "${CRAFT_PART_INSTALL}/etc/nginx" "${CRAFT_PART_INSTALL}/web"
+      cp nginx.conf.template "${CRAFT_PART_INSTALL}/etc/nginx/"
+
+      # nginx.conf.template has /web/dist location set in it.
+      cp -r dist "${CRAFT_PART_INSTALL}/web/"
