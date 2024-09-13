@@ -12,7 +12,7 @@ ROCK_EXPECTED_FILES = [
 ]
 
 
-@pytest.mark.parametrize("image_version", ["v1.7.0"])
+@pytest.mark.parametrize("image_version", ["v1.6.2", "v1.7.0"])
 def test_longhorn_manager_rock(image_version):
     """Test longhorn-manager rock."""
     rock = env_util.get_build_meta_info_for_rock_version(

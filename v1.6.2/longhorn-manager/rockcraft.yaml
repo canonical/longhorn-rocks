@@ -1,0 +1,101 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Longhorn manager image:
+# longhornio/longhorn-manager:v1.6.2
+
+name: longhorn-manager
+summary: Rock containing Longhorn manager component.
+description: |
+  Rock containing Longhorn manager component: https://github.com/longhorn/longhorn-manager
+  Aims to replicate the upstream official image: longhornio/longhorn-manager:v1.6.2
+license: Apache-2.0
+
+version: "v1.6.2"
+
+# NOTE(aznashwan): the base for the manager image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/longhorn-manager/blob/v1.6.2/package/Dockerfile#L1
+base: ubuntu@24.04
+build-base: ubuntu@24.04
+platforms:
+  amd64:
+
+services:
+  longhorn-manager:
+    summary: "longhorn-manager service"
+    startup: enabled
+    override: replace
+    # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/package/Dockerfile#L10
+    command: "launch-manager"
+    on-success: shutdown
+    on-failure: shutdown
+
+parts:
+  # NOTE(aznashwan): the longhorn binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/Dockerfile.dapper
+  # The Makefile targets are just the scripts found in the scripts/ directory which
+  # are executed within the Dapper build container:
+  # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/Makefile#L10-L11
+  build-longhorn-manager:
+    plugin: nil
+    source-type: git
+    source: https://github.com/longhorn/longhorn-manager
+    source-tag: ${CRAFT_PROJECT_VERSION}
+    source-depth: 1
+    build-packages:
+      # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/Dockerfile.dapper#L8
+      - gcc
+      - ca-certificates
+      # - libdevmapper1_03
+      - libltdl7
+    build-snaps:
+      # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/Dockerfile.dapper#L19
+      - go/1.21/stable
+    build-environment:
+      - GOOS: linux
+      - GOARCH: $CRAFT_ARCH_BUILD_FOR
+      - CGO_ENABLED: 0
+      - VERSION: $CRAFT_PROJECT_VERSION
+    override-build: |
+      # NOTE(claudiub): The original longhorn-manager image doesn't have an entrypoint, only a CMD.
+      # This means that when the image is launched, it will run the CMD directly. Basically, the
+      # CMD is the ENTRYPOINT (binary + arguments). That works fine with the current deployments.
+      #
+      # longhorn-manager will create the daemonset.apps/longhorn-csi-plugin, which will
+      # have a longhorn-manager container, which doesn't override the entrypoint, only the
+      # args (aka CMD).
+      # But in our rock scenario, Pebble is the entrypoint, which will get those arguments and pass them
+      # on onto the service defined above. This results in an invalid command being run, something like:
+      # longhorn-manager -d daemon longhorn-manager -d csi --nodeid=...
+      #
+      # This patch updates the mentioned container args to command, overriding the Pebble entrypoint,
+      # avoiding this problem.
+      cp $CRAFT_PROJECT_DIR/longhorn-csi-plugin-command.patch ./
+      git apply -v longhorn-csi-plugin-command.patch
+
+      # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/package/Dockerfile#L6
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin/
+      cp package/launch-manager package/nsmounter $CRAFT_PART_INSTALL/usr/local/sbin/
+
+      # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/scripts/build#L23
+      LINKFLAGS="-X github.com/longhorn/longhorn-manager/meta.Version=$VERSION -extldflags -static -s"
+      go build -o $CRAFT_PART_INSTALL/usr/local/sbin/ -ldflags "$LINKFLAGS"
+
+  add-packages:
+    plugin: nil
+    # https://github.com/longhorn/longhorn-manager/blob/v1.6.2/package/Dockerfile#L3
+    stage-packages:
+      - iproute2
+      - nfs-common  # nfs-client
+      - cifs-utils
+      - bind9-utils  # bind-utils
+      - e2fsprogs
+      - xfsprogs
+      - zip
+      - unzip
+    stage-snaps:
+      - iputils

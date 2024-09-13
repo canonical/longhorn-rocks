@@ -1,0 +1,13 @@
+diff --git a/csi/deployment.go b/csi/deployment.go
+index 470aa22da..d9b6a0596 100644
+--- a/csi/deployment.go
++++ b/csi/deployment.go
+@@ -366,7 +366,7 @@ func NewPluginDeployment(namespace, serviceAccount, nodeDriverRegistrarImage, li
+ 									},
+ 								},
+ 							},
+-							Args: []string{
++							Command: []string{
+ 								"longhorn-manager",
+ 								"-d",
+ 								"csi",
