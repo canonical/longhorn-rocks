@@ -98,6 +98,17 @@ def test_longhorn_helm_chart_deployment(
     function_instance: harness.Instance, image_version: str
 ):
 
+    # Install prerequisites.
+    base_url = f"https://raw.githubusercontent.com/longhorn/longhorn/{image_version}/deploy/prerequisite"
+    for yaml_file in [
+        "longhorn-iscsi-installation.yaml",
+        "longhorn-nfs-installation.yaml",
+    ]:
+        url = f"{base_url}/{yaml_file}"
+        process = function_instance.exec(
+            ["k8s", "kubectl", "apply", "-f", url], check=True
+        )
+
     architecture = platform_util.get_current_rockcraft_platform_architecture()
 
     # Compose the Helm command line args for overriding the
