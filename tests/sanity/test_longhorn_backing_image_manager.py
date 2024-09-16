@@ -30,10 +30,7 @@ def test_check_rock_image_contents(image_version):
     )
     rock_image = rock_meta.image
 
-    binary_paths_to_check = [
-        "/tini",
-        "/usr/local/bin/backing-image-manager"
-    ]
+    binary_paths_to_check = ["/tini", "/usr/local/bin/backing-image-manager"]
 
     docker_util.ensure_image_contains_paths(
         rock_image,

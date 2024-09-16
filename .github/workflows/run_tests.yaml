@@ -47,6 +47,9 @@ jobs:
             multipass auth Passw0rd && break
             sleep 1
           done
+      - name: Run lint
+        run: |
+          tox --conf tests/tox.ini -e lint
       - name: Run sanity tests
         env:
           BUILT_ROCKS_METADATA: ${{ inputs.rock-metas }}
