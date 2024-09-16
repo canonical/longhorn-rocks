@@ -98,16 +98,6 @@ parts:
 
       ldconfig
 
-      # NOTE(aznashwan): pull and install liblonghorn
-      # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L15-L22
-      LIBLONGHORN_COMMIT_ID="53d1c063b95efc8d949b095bd4bf04637230265f"
-      cd /usr/src
-      git clone https://github.com/rancher/liblonghorn.git
-      cd liblonghorn
-      git checkout ${LIBLONGHORN_COMMIT_ID}
-      make
-      make install
-
   # NOTE(aznashwan): the Makefile targets are just the scripts found in the
   # scripts/ directory which are executed within the Dapper build container:
   # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/Makefile#L1
@@ -128,13 +118,11 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       bash ./scripts/build
 
       # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L59
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp $CRAFT_PART_SRC/bin/longhorn $CRAFT_PART_INSTALL/usr/local/bin
+      cp bin/longhorn $CRAFT_PART_INSTALL/usr/local/bin
 
       # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L62
       cp package/launch-simple-longhorn $CRAFT_PART_INSTALL/usr/local/bin
@@ -150,7 +138,7 @@ parts:
     after: ["setup-build-env"]
 
     source-type: git
-    source: https://github.com/longhorn/longhorn-engine
+    source: https://github.com/longhorn/longhorn-instance-manager
     # NOTE(aznashwan): the build steps in the Dapper file clone the
     # longhorn-instance-manager's tip, which could potentially lead
     # to compatibility issues so we pin its version too:
@@ -160,8 +148,6 @@ parts:
 
     override-build: |
       set -eux -o pipefail
-
-      cd $CRAFT_PART_SRC
 
       go build \
         -tags netgo -ldflags "-linkmode external -extldflags -static" \
@@ -183,7 +169,6 @@ parts:
       set -eux -o pipefail
 
       # https://github.com/longhorn/longhorn-engine/blob/v1.7.0/package/Dockerfile#L15-L22
-      cd $CRAFT_PART_SRC
       make
       make install
 
@@ -200,7 +185,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       make
       make install
 
