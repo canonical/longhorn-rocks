@@ -1,0 +1,62 @@
+name: Run rocks tests
+
+on:
+  workflow_call:
+    inputs:
+      rock-metas:
+        description: List of maps featuring the built {name, version, path, arch, image}
+        type: string
+        default: "[]"
+
+jobs:
+  run-tests:
+    if: ${{ inputs.rock-metas != '[]' }}
+    name: Run tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Maximize build space
+        uses: AdityaGarg8/remove-unwanted-software@v4.1
+        with:
+          remove-android: 'true'
+          remove-haskell: 'true'
+          remove-codeql: 'true'
+          remove-swapfile: 'true'
+      - name: Checkout repository
+        uses: actions/checkout@v4.1.1
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      - name: Setup environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          pip install tox
+      - name: Install multipass
+        run: |
+          set -x
+          sudo snap install multipass
+
+          # We need to authenticate into multipass, since we're not running as root.
+          # https://github.com/canonical/multipass/issues/1437#issuecomment-1435357872
+          sudo multipass set local.passphrase=Passw0rd
+
+          for i in {0..4}; do
+            # If we auth too soon, we might get this error:
+            # authenticate failed: cannot connect to the multipass socket
+            multipass auth Passw0rd && break
+            sleep 1
+          done
+      - name: Run sanity tests
+        env:
+          BUILT_ROCKS_METADATA: ${{ inputs.rock-metas }}
+        run: |
+          tox --conf tests/tox.ini -e sanity
+      - name: Run integration tests
+        env:
+          BUILT_ROCKS_METADATA: ${{ inputs.rock-metas }}
+        run: |
+          export TEST_SUBSTRATE=multipass
+          export TEST_MULTIPASS_MEMORY=6G
+          export TEST_MULTIPASS_DISK=40G
+          tox --conf tests/tox.ini -e integration
