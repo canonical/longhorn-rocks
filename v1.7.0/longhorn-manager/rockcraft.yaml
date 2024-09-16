@@ -16,7 +16,7 @@ version: "v1.7.0"
 # NOTE(aznashwan): the base for the manager image is the Suse Linux Enterprise
 # Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
 # and is thus most comparable to 24.04:
-# https://github.com/longhorn/longhorn-manager/blob/v1.7.0/package/Dockerfile#L44
+# https://github.com/longhorn/longhorn-manager/blob/v1.7.0/package/Dockerfile#L3
 base: ubuntu@24.04
 build-base: ubuntu@24.04
 platforms:

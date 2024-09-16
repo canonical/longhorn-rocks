@@ -159,17 +159,17 @@ parts:
       ln -sf /proc/self/mounts $CRAFT_PART_INSTALL/etc/mtab
 
       # create and add the ganesha-extra files.
-      # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L40
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L38
       mkdir -p $CRAFT_PART_INSTALL/etc/dbus-1/system.d
       cp src/scripts/ganeshactl/org.ganesha.nfsd.conf $CRAFT_PART_INSTALL/etc/dbus-1/system.d/ 
 
       # add libs from /usr/local/lib64
-      # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L62
+      # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L53
       echo /usr/local/lib64 > $CRAFT_PART_INSTALL/etc/ld.so.conf.d/local_libs.conf
 
       # create other files.
       mkdir -p $CRAFT_PART_INSTALL/var/run/dbus $CRAFT_PART_INSTALL/export
 
-      # do not ask systemd for user IDs or groups (slows down dbus-daemon start),
+      # do not ask systemd for user IDs or groups (slows down dbus-daemon start).
       cp /etc/nsswitch.conf $CRAFT_PART_INSTALL/etc/
       sed -i s/systemd// $CRAFT_PART_INSTALL/etc/nsswitch.conf

@@ -27,7 +27,7 @@ services:
     summary: "longhorn-share-manager service"
     startup: enabled
     override: replace
-    # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L44
+    # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L81
     command: "/longhorn-share-manager [ --help ]"
     on-success: shutdown
     on-failure: shutdown
@@ -158,6 +158,6 @@ parts:
       # create other files.
       mkdir -p $CRAFT_PART_INSTALL/var/run/dbus $CRAFT_PART_INSTALL/export
 
-      # do not ask systemd for user IDs or groups (slows down dbus-daemon start),
+      # do not ask systemd for user IDs or groups (slows down dbus-daemon start).
       cp /etc/nsswitch.conf $CRAFT_PART_INSTALL/etc/
       sed -i s/systemd// $CRAFT_PART_INSTALL/etc/nsswitch.conf

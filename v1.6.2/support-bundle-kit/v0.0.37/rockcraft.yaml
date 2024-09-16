@@ -31,11 +31,14 @@ services:
     summary: "support-bundle-kit service"
     override: replace
     startup: enabled
+    # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/package/Dockerfile#L35
     command: "entrypoint.sh"
     on-success: shutdown
     on-failure: shutdown
 
 parts:
+  # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/package/Dockerfile#L10
+  # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/package/Dockerfile#L20-L21
   add-packages:
     plugin: nil
     stage-packages:
@@ -52,6 +55,7 @@ parts:
     source-tag: $CRAFT_PROJECT_VERSION
     source-depth: 1
     build-snaps:
+      # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/Dockerfile.dapper#L1
       - go/1.20/stable
     build-environment:
       - GOOS: linux
@@ -63,9 +67,11 @@ parts:
     override-build: |
       mkdir -p "${CRAFT_PART_INSTALL}/usr/bin/" "${CRAFT_PART_INSTALL}/tmp"
 
+      # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/scripts/build#L14
       LINKFLAGS="-extldflags -static -s -X github.com/rancher/support-bundle-kit/cmd.AppVersion=$VERSION"
       go build -o $CRAFT_PART_INSTALL/usr/bin/ -ldflags "$LINKFLAGS"
 
+      # https://github.com/rancher/support-bundle-kit/blob/v0.0.37/package/Dockerfile#L23-L33
       cp package/entrypoint.sh "${CRAFT_PART_INSTALL}/usr/bin/"
       cp hack/support-bundle-collector.sh hack/collector-* "${CRAFT_PART_INSTALL}/usr/bin/"
 

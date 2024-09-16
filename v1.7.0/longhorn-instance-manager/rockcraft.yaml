@@ -16,7 +16,7 @@ version: "v1.7.0"
 # NOTE(aznashwan): the base for the Instance Manager image is the Suse Linux Enterprise
 # Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
 # and is thus most comparable to 24.04:
-# https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L44
+# https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L34
 base: ubuntu@24.04
 build-base: ubuntu@24.04
 platforms:
@@ -115,13 +115,11 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       bash ./scripts/build
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.7.0/package/Dockerfile#L165-L166
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
+      cp bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
 
       # NOTE(aznashwan): the original script is lacking any error
       # handling/debugging so we add it ourselves:
@@ -147,7 +145,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       go build
 
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
@@ -186,7 +183,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       make
       make install
 
@@ -203,7 +199,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       make
       make install
 
@@ -222,8 +217,6 @@ parts:
 
     override-build: |
       set -eux -o pipefail
-
-      cd $CRAFT_PART_SRC
 
       git submodule update --init
 
@@ -264,8 +257,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       mkdir -p .build
       cd .build
 
@@ -294,8 +285,6 @@ parts:
 
     override-build: |
       set -eux -o pipefail
-
-      cd $CRAFT_PART_SRC
 
       meson setup --force-fallback-for=libnvme .build
       meson compile -C .build
