@@ -23,14 +23,22 @@ TEMPLATES_DIR = DIR / ".." / "templates"
 CSI_VOLUME_ANNOTATION = "csi.volume.kubernetes.io/nodeid"
 LONGHORN_CSI_ANNOTATION_VALUE = "driver.longhorn.io"
 
-IMAGE_VERSIONS = ["v1.7.0"]
-# TODO(aznashwan): enable previous version testing too:
-# IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
-CHART_RELEASE_URL = "https://github.com/longhorn/charts/releases/download/longhorn-1.7.0/longhorn-1.7.0.tgz"
+IMAGE_VERSIONS = ["v1.6.2", "v1.7.0"]
+CHART_RELEASE_URL = "https://github.com/longhorn/charts/releases/download/longhorn-%(version)s/longhorn-%(version)s.tgz"
 INSTALL_NAME = "longhorn"
 INSTALL_NS = "longhorn"
 
 LONGHORN_AUX_IMAGES_VERSION_MAP = {
+    # https://github.com/longhorn/longhorn/releases/download/v1.6.2/longhorn-images.txt
+    "v1.6.2": {
+        "support-bundle-kit": "v0.0.37",
+        "csi-attacher": "v4.5.1",
+        "csi-node-driver-registrar": "v2.9.2",
+        "csi-resizer": "v1.10.1",
+        "csi-snapshotter": "v6.3.4",
+        "livenessprobe": "v2.12.0",
+        "openshift-origin-oauth-proxy": "4.14",
+    },
     # https://github.com/longhorn/longhorn/releases/download/v1.7.0/longhorn-images.txt
     "v1.7.0": {
         "support-bundle-kit": "v0.0.41",
@@ -40,7 +48,7 @@ LONGHORN_AUX_IMAGES_VERSION_MAP = {
         "csi-snapshotter": "v7.0.2",
         "livenessprobe": "v2.13.1",
         "openshift-origin-oauth-proxy": "4.15",
-    }
+    },
 }
 
 # This mapping indicates which fields of the upstream Longhorn Helm chart
@@ -59,6 +67,16 @@ IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
 }
 
 LONGHORN_CSI_IMAGES_VERSION_MAP = {
+    # https://github.com/longhorn/longhorn/releases/download/v1.6.2/longhorn-images.txt
+    "v1.6.2": {
+        # helm image subsection: image
+        "csi.attacher": "ghcr.io/canonical/csi-attacher:4.5.1-ck4",
+        "csi.provisioner": "ghcr.io/canonical/csi-provisioner:3.6.4-ck0",
+        "csi.nodeDriverRegistrar": "ghcr.io/canonical/csi-node-driver-registrar:2.9.2-ck1",
+        "csi.resizer": "ghcr.io/canonical/csi-resizer:1.10.1-ck6",
+        "csi.snapshotter": "ghcr.io/canonical/csi-snapshotter:6.3.4-ck1",
+        "csi.livenessProbe": "ghcr.io/canonical/livenessprobe:2.12.0-ck6",
+    },
     # https://github.com/longhorn/longhorn/releases/download/v1.7.0/longhorn-images.txt
     "v1.7.0": {
         # helm image subsection: image
@@ -144,8 +162,10 @@ def test_longhorn_helm_chart_deployment(
         for subsection, image in LONGHORN_CSI_IMAGES_VERSION_MAP[image_version].items()
     ]
 
+    # include the version in the url, but without the leading 'v'.
+    chart_url = CHART_RELEASE_URL % {"version": image_version[1:]}
     helm_command = k8s_util.get_helm_install_command(
-        INSTALL_NAME, CHART_RELEASE_URL, INSTALL_NS, images=images
+        INSTALL_NAME, chart_url, INSTALL_NS, images=images
     )
     helm_command.extend(all_chart_value_overrides_args)
 
