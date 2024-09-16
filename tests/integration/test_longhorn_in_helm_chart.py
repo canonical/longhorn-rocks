@@ -210,33 +210,39 @@ def test_longhorn_helm_chart_deployment(
         function_instance, CSI_VOLUME_ANNOTATION, LONGHORN_CSI_ANNOTATION_VALUE
     )
 
-    # Deploy an nginx Pod with a PVC, which should be satisfied by Longhorn.
-    function_instance.exec(
-        ["k8s", "kubectl", "apply", "-f", "-"],
-        input=pathlib.Path(TEMPLATES_DIR / "nginx-pod.yaml").read_bytes(),
-    )
+    # Deploy nginx Pods with PVCs, which should be satisfied by Longhorn.
+    for yaml_file in ["nginx-pod.yaml", "nginx-nfs-pod.yaml"]:
+        function_instance.exec(
+            ["k8s", "kubectl", "apply", "-f", "-"],
+            input=pathlib.Path(TEMPLATES_DIR / yaml_file).read_bytes(),
+        )
 
-    # Expect the Pod to become ready, and that it has the volume attached.
-    k8s_util.wait_for_resource(
-        function_instance,
-        "pod",
-        "nginx-longhorn-example",
-        condition=constants.K8S_CONDITION_READY,
-    )
+    # Expect the Pods to become ready, and that they have the volume attached.
+    expected_outputs = {
+        "nginx-longhorn-example": "ext4   /var/www /dev/longhorn/pvc-",
+        "nginx-longhorn-nfs-example": "nfs4   /var/www ",
+    }
+    for pod_name, expected_output in expected_outputs.items():
+        k8s_util.wait_for_resource(
+            function_instance,
+            "pod",
+            pod_name,
+            condition=constants.K8S_CONDITION_READY,
+        )
 
-    process = function_instance.exec(
-        [
-            "k8s",
-            "kubectl",
-            "exec",
-            "nginx-longhorn-example",
-            "--",
-            "bash",
-            "-c",
-            "findmnt /var/www -o FSTYPE,TARGET,SOURCE",
-        ],
-        capture_output=True,
-        text=True,
-    )
+        process = function_instance.exec(
+            [
+                "k8s",
+                "kubectl",
+                "exec",
+                pod_name,
+                "--",
+                "bash",
+                "-c",
+                "findmnt /var/www -o FSTYPE,TARGET,SOURCE",
+            ],
+            capture_output=True,
+            text=True,
+        )
 
-    assert "ext4   /var/www /dev/longhorn/pvc-" in process.stdout
+        assert expected_output in process.stdout
