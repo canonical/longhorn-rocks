@@ -18,7 +18,7 @@ license: Apache-2.0
 
 version: "v1.7.0"
 
-# NOTE(aznashwan): the base for the engine image is the Suse Linux Enterprise
+# NOTE(aznashwan): the base for the UI image is the Suse Linux Enterprise
 # Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
 # and is thus most comparable to 24.04:
 # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L13
@@ -46,6 +46,7 @@ services:
     on-failure: shutdown
 
 parts:
+  # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L34
   nginx-user:
     plugin: nil
     overlay-script: |
@@ -67,6 +68,7 @@ parts:
     after: [nginx-user]
     plugin: nil
     stage-packages:
+      # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L18
       - curl
       - libxml2
       - gettext
@@ -91,12 +93,14 @@ parts:
     build-packages:
       - gettext-base
     build-snaps:
+      # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L1
       - node/16/stable
     build-environment:
       - VERSION: $CRAFT_PROJECT_VERSION
     override-build: |
       npm ci
       # Inject the version before building.
+      # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L10
       sed -i -e "s/\${VERSION}/${VERSION}/" src/utils/config.js
       npm run build
 
@@ -104,4 +108,5 @@ parts:
       cp nginx.conf.template "${CRAFT_PART_INSTALL}/etc/nginx/"
 
       # nginx.conf.template has /web/dist location set in it.
+      # https://github.com/longhorn/longhorn-ui/blob/v1.7.0/Dockerfile#L24
       cp -r dist "${CRAFT_PART_INSTALL}/web/"

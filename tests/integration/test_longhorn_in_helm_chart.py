@@ -28,28 +28,6 @@ CHART_RELEASE_URL = "https://github.com/longhorn/charts/releases/download/longho
 INSTALL_NAME = "longhorn"
 INSTALL_NS = "longhorn"
 
-LONGHORN_AUX_IMAGES_VERSION_MAP = {
-    # https://github.com/longhorn/longhorn/releases/download/v1.6.2/longhorn-images.txt
-    "v1.6.2": {
-        "support-bundle-kit": "v0.0.37",
-        "csi-attacher": "v4.5.1",
-        "csi-node-driver-registrar": "v2.9.2",
-        "csi-resizer": "v1.10.1",
-        "csi-snapshotter": "v6.3.4",
-        "livenessprobe": "v2.12.0",
-        "openshift-origin-oauth-proxy": "4.14",
-    },
-    # https://github.com/longhorn/longhorn/releases/download/v1.7.0/longhorn-images.txt
-    "v1.7.0": {
-        "support-bundle-kit": "v0.0.41",
-        "csi-attacher": "v4.6.1",
-        "csi-node-driver-registrar": "v2.11.1",
-        "csi-resizer": "v1.11.1",
-        "csi-snapshotter": "v7.0.2",
-        "livenessprobe": "v2.13.1",
-        "openshift-origin-oauth-proxy": "4.15",
-    },
-}
 
 # This mapping indicates which fields of the upstream Longhorn Helm chart
 # contain the 'image' fields which should be overridden with the ROCK
@@ -63,7 +41,6 @@ IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP = {
     "longhorn-share-manager": "longhorn.shareManager",
     "backing-image-manager": "longhorn.backingImageManager",
     "support-bundle-kit": "longhorn.supportBundleKit",
-    "openshift-origin-oauth-proxy": "openshift.oauthProxy",
 }
 
 LONGHORN_CSI_IMAGES_VERSION_MAP = {
@@ -111,6 +88,82 @@ def _wait_for_node_annotation(instance, annotation, value):
     assert annotated, f"Expected node to have annotation '{annotation}={value}'."
 
 
+def _wait_for_longhorn(instance: harness.Instance):
+    # HACK(aznashwan): all the Longhorn deployment resources in the chart
+    # take a while to be properly set up, so we provide a generous wait:
+    retry_kwargs = {"retry_times": 30, "retry_delay_s": 10}
+
+    daemonsets = [
+        "longhorn-csi-plugin",
+        "longhorn-manager",
+    ]
+    for daemonset in daemonsets:
+        k8s_util.wait_for_daemonset(
+            instance,
+            daemonset,
+            INSTALL_NS,
+            **retry_kwargs,
+        )
+
+    deployments = [
+        "csi-attacher",
+        "csi-provisioner",
+        "csi-resizer",
+        "csi-snapshotter",
+        "longhorn-driver-deployer",
+        "longhorn-ui",
+    ]
+    for deployment in deployments:
+        k8s_util.wait_for_deployment(
+            instance,
+            deployment,
+            INSTALL_NS,
+            condition=constants.K8S_CONDITION_AVAILABLE,
+            **retry_kwargs,
+        )
+
+    # Wait until the node gets annotated with driver.longhorn.io, meaning that the Longhorn CSI
+    # plugin was successfully registered.
+    _wait_for_node_annotation(
+        instance, CSI_VOLUME_ANNOTATION, LONGHORN_CSI_ANNOTATION_VALUE
+    )
+
+
+def _get_helm_command(image_version: str):
+    architecture = platform_util.get_current_rockcraft_platform_architecture()
+
+    # Compose the Helm command line args for overriding the
+    # image fields for each component:
+    all_rocks_meta_info = env_util.get_rocks_meta_info_from_env()
+
+    # NOTE(aznashwan): GitHub actions UI sometimes truncates env values:
+    LOG.info(
+        f"All built rocks metadata from env was: "
+        f"{json.dumps([rmi.__dict__ for rmi in all_rocks_meta_info])}"
+    )
+
+    images = []
+    for rmi in all_rocks_meta_info:
+        if rmi.name in IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP and (
+            rmi.version == image_version and rmi.arch == architecture
+        ):
+            chart_section = IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP[rmi.name]
+            images.append(k8s_util.HelmImage(rmi.image, subitem=chart_section))
+
+    images += [
+        k8s_util.HelmImage(image, subitem=subsection)
+        for subsection, image in LONGHORN_CSI_IMAGES_VERSION_MAP[image_version].items()
+    ]
+
+    # include the version in the url, but without the leading 'v'.
+    chart_url = CHART_RELEASE_URL % {"version": image_version[1:]}
+    helm_command = k8s_util.get_helm_install_command(
+        INSTALL_NAME, chart_url, INSTALL_NS, images=images
+    )
+
+    return helm_command
+
+
 @pytest.mark.parametrize("image_version", IMAGE_VERSIONS)
 def test_longhorn_helm_chart_deployment(
     function_instance: harness.Instance, image_version: str
@@ -127,88 +180,12 @@ def test_longhorn_helm_chart_deployment(
             ["k8s", "kubectl", "apply", "-f", url], check=True
         )
 
-    architecture = platform_util.get_current_rockcraft_platform_architecture()
-
-    # Compose the Helm command line args for overriding the
-    # image fields for each component:
-    all_chart_value_overrides_args = []
-    found_env_rocks_metadata = []
-    all_rocks_meta_info = env_util.get_rocks_meta_info_from_env()
-
-    # NOTE(aznashwan): GitHub actions UI sometimes truncates env values:
-    LOG.info(
-        f"All built rocks metadata from env was: "
-        f"{json.dumps([rmi.__dict__ for rmi in all_rocks_meta_info])}"
-    )
-
-    for rmi in all_rocks_meta_info:
-        if rmi.name in IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP and (
-            rmi.version == image_version and rmi.arch == architecture
-        ):
-            chart_section = IMAGE_NAMES_TO_CHART_VALUES_OVERRIDES_MAP[rmi.name]
-            repo, tag = rmi.image.split(":")
-            all_chart_value_overrides_args.extend(
-                [
-                    "--set",
-                    f"image.{chart_section}.repository={repo}",
-                    "--set",
-                    f"image.{chart_section}.tag={tag}",
-                ]
-            )
-            found_env_rocks_metadata.append(rmi.name)
-
-    images = [
-        k8s_util.HelmImage(image, subitem=subsection)
-        for subsection, image in LONGHORN_CSI_IMAGES_VERSION_MAP[image_version].items()
-    ]
-
-    # include the version in the url, but without the leading 'v'.
-    chart_url = CHART_RELEASE_URL % {"version": image_version[1:]}
-    helm_command = k8s_util.get_helm_install_command(
-        INSTALL_NAME, chart_url, INSTALL_NS, images=images
-    )
-    helm_command.extend(all_chart_value_overrides_args)
-
+    # Deploy Longhorn through a helm chart.
+    helm_command = _get_helm_command(image_version)
     function_instance.exec(helm_command)
 
-    # HACK(aznashwan): all the Longhorn deployment resources in the chart
-    # take a while to be properly set up, so we provide a generous wait:
-    retry_kwargs = {"retry_times": 30, "retry_delay_s": 10}
-
-    daemonsets = [
-        "longhorn-csi-plugin",
-        "longhorn-manager",
-    ]
-    for daemonset in daemonsets:
-        k8s_util.wait_for_daemonset(
-            function_instance,
-            daemonset,
-            INSTALL_NS,
-            **retry_kwargs,
-        )
-
-    deployments = [
-        "csi-attacher",
-        "csi-provisioner",
-        "csi-resizer",
-        "csi-snapshotter",
-        "longhorn-driver-deployer",
-        "longhorn-ui",
-    ]
-    for deployment in deployments:
-        k8s_util.wait_for_deployment(
-            function_instance,
-            deployment,
-            INSTALL_NS,
-            condition=constants.K8S_CONDITION_AVAILABLE,
-            **retry_kwargs,
-        )
-
-    # Wait until the node gets annotated with driver.longhorn.io, meaning that the Longhorn CSI
-    # plugin was successfully registered.
-    _wait_for_node_annotation(
-        function_instance, CSI_VOLUME_ANNOTATION, LONGHORN_CSI_ANNOTATION_VALUE
-    )
+    # Wait for Longhorn to become active,
+    _wait_for_longhorn(function_instance)
 
     # Deploy an nginx Pod with a PVC, which should be satisfied by Longhorn.
     function_instance.exec(
