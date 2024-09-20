@@ -1,0 +1,144 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for the Longhorn Backing Image Manager image:
+# longhornio/backing-image-manager:v1.6.2
+
+name: backing-image-manager
+summary: Rock containing the Longhorn Backing Image Manager component.
+description: |
+  Rock containing Longhorn Backing Image manager component: https://github.com/longhorn/backing-image-manager
+  Aims to replicate the upstream official image: longhornio/backing-image-manager:v1.6.2
+license: Apache-2.0
+
+version: "v1.6.2"
+
+# NOTE(aznashwan): the base for the image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 5.14,
+# and is thus most comparable to 22.04:
+# https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L1
+base: ubuntu@22.04
+
+build-base: ubuntu@22.04
+platforms:
+  amd64:
+
+
+services:
+  backing-image-manager:
+    startup: enabled
+    override: replace
+
+    # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L21-L23
+    command: /tini -- [ backing-image-manager ]
+
+    on-success: shutdown
+    on-failure: shutdown
+
+entrypoint-service: backing-image-manager
+
+parts:
+
+  # NOTE(aznashwan): the binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/Dockerfile.dapper
+  setup-build-env:
+    plugin: nil
+
+    build-packages:
+      # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/Dockerfile.dapper#L20-L24
+      - cmake
+      - wget
+      - curl
+      - git
+      - less
+      - file
+      - libkmod-dev             # libkmod-devel
+      - libnl-3-dev             # libnl3-devel
+      - linux-headers-5.15.0-25 # linux-glibc-devel
+      - pkg-config
+      - psmisc
+      - fuse
+      - librdmacm-dev           # librdmacm1
+      - rdmacm-utils            # librdmacm-utils
+      - libibverbs-dev          # libibverbs
+      - libaio-dev              # libaio-devel
+      - libc6-dev               # glibc-devel, glibc-devel-static
+      - iptables
+      - libltdl7
+      - libdevmapper1.02.1      # libdevmapper1_03
+      - iproute2
+      - jq
+      - gcc
+
+  # NOTE(aznashwan): the Makefile targets are just the scripts found in the
+  # scripts/ directory which are executed within the Dapper build container:
+  # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/Makefile#L1
+  # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/Makefile#L10-L11
+  build-lonhorn-backing-image-manager:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    source-type: git
+    source: https://github.com/longhorn/backing-image-manager
+    source-tag: v1.6.2
+    source-depth: 1
+
+    build-snaps:
+      # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/Dockerfile.dapper#L36
+      - go/1.21/stable
+
+    override-build: |
+      set -eux -o pipefail
+
+      cd $CRAFT_PART_SRC
+
+      bash ./scripts/build
+
+      # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L13
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
+      cp $CRAFT_PART_SRC/bin/backing-image-manager $CRAFT_PART_INSTALL/usr/local/bin/backing-image-manager
+
+  # Pulls a pre-built binary release of the `tini` init system.
+  # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L18-L20
+  fetch-tini-init:
+    plugin: nil
+    after: ["setup-build-env"]
+
+    override-build: |
+      set -eux -o pipefail
+
+      TINI_VERSION="v0.19.0"
+      ARCH="$CRAFT_TARGET_ARCH"
+
+      URL="https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-${ARCH}"
+
+      curl -sSfL $URL -o $CRAFT_PART_INSTALL/tini
+      chmod +x $CRAFT_PART_INSTALL/tini
+
+  prep-final-image:
+    plugin: nil
+
+    # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L9-L11
+    stage-packages:
+      - kmod
+      - curl
+      - wget
+      - nfs-common              # nfs-client
+      - nfs4-acl-tools
+      - fuse
+      - librdmacm-dev           # librdmacm1
+      - rdmacm-utils            # librdmacm-utils
+      - libibverbs-dev          # libibverbs
+      - libconfig-general-perl  # perl-Config-General
+      - libaio-dev              # libaio-devel
+      - sg3-utils               # sg3_utils
+      - net-tools               # iputils
+      - telnet
+      - iperf3                  # iperf
+      - qemu-utils              # qemu-tools
+      - iproute2
+      - e2fsprogs
+      - xfsprogs
+      - xfslibs-dev             # xfsprogs-devel
