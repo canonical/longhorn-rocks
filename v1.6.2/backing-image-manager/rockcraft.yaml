@@ -92,13 +92,11 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       bash ./scripts/build
 
       # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L13
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp $CRAFT_PART_SRC/bin/backing-image-manager $CRAFT_PART_INSTALL/usr/local/bin/backing-image-manager
+      cp bin/backing-image-manager $CRAFT_PART_INSTALL/usr/local/bin/backing-image-manager
 
   # Pulls a pre-built binary release of the `tini` init system.
   # https://github.com/longhorn/backing-image-manager/blob/v1.6.2/package/Dockerfile#L18-L20
