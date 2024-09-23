@@ -72,8 +72,8 @@ parts:
   build-ganesha:
     plugin: nil
     source-type: git
-    source: https://github.com/nfs-ganesha/nfs-ganesha
-    source-tag: V5.9
+    source: https://github.com/rancher/nfs-ganesha
+    source-tag: v5_20240716
     source-depth: 1
     build-packages:
       - autoconf
@@ -112,6 +112,9 @@ parts:
       - nfs4-acl-tools
       - xfsprogs
       - e2fsprogs
+      # Required by the rancher fork of nfs-ganesha, otherwise we get the error:
+      # ganesha.nfsd: error while loading shared libraries: libcurl-gnutls.so.4: cannot open shared object file: No such file or directory
+      - libcurl3-gnutls
 
     override-build: |
       # https://github.com/longhorn/longhorn-share-manager/blob/v1.7.0/package/Dockerfile#L20-L25
