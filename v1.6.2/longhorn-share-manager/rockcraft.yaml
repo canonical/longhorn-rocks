@@ -14,11 +14,11 @@ license: Apache-2.0
 version: "v1.6.2"
 
 # NOTE(aznashwan): the base for the share manager image is the Suse Linux Enterprise
-# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 6.4,
-# and is thus most comparable to 24.04:
+# Base Container Image (SLE BCE) Service Pack 5 which ships with Linux 5.14,
+# and is thus most comparable to 22.04:
 # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L42
-base: ubuntu@24.04
-build-base: ubuntu@24.04
+base: ubuntu@22.04
+build-base: ubuntu@22.04
 platforms:
   amd64:
 
@@ -103,7 +103,9 @@ parts:
     stage-packages:
       - rpcbind
       - libblkid1
-      # - liburcu6 - already included.
+      # Needed by ganesha.nfsd, otherwise we get the following error:
+      # ganesha.nfsd: error while loading shared libraries: liburcu-bp.so.8
+      - liburcu8
       - dbus-x11  # dbus-1-x11
       - libdbus-1-3  # dbus-1
       - libnfsidmap-dev  # nfsidmap-devel
