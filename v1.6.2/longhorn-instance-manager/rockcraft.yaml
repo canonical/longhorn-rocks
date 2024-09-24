@@ -108,13 +108,11 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       bash ./scripts/build
 
       # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/package/Dockerfile#L136
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
-      cp $CRAFT_PART_SRC/bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
+      cp bin/longhorn-instance-manager $CRAFT_PART_INSTALL/usr/local/bin
 
       # NOTE(aznashwan): the original script is lacking any error
       # handling/debugging so we add it ourselves:
@@ -139,13 +137,12 @@ parts:
     source-depth: 1
 
     build-snaps:
-      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L1
+      # https://github.com/longhorn/longhorn-instance-manager/blob/v1.6.2/Dockerfile.dapper#L40
       - go/1.22/stable
 
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       go build
 
       mkdir -p $CRAFT_PART_INSTALL/usr/local/bin
@@ -184,7 +181,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       make
       make install
 
@@ -201,7 +197,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
       make
       make install
 
@@ -220,8 +215,6 @@ parts:
 
     override-build: |
       set -eux -o pipefail
-
-      cd $CRAFT_PART_SRC
 
       git submodule update --init
 
@@ -261,8 +254,6 @@ parts:
     override-build: |
       set -eux -o pipefail
 
-      cd $CRAFT_PART_SRC
-
       mkdir -p .build
       cd .build
 
@@ -291,8 +282,6 @@ parts:
 
     override-build: |
       set -eux -o pipefail
-
-      cd $CRAFT_PART_SRC
 
       meson setup --force-fallback-for=libnvme .build
       meson compile -C .build
