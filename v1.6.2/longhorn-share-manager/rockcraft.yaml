@@ -72,8 +72,8 @@ parts:
   build-ganesha:
     plugin: nil
     source-type: git
-    source: https://github.com/nfs-ganesha/nfs-ganesha
-    source-tag: V5.7
+    source: https://github.com/longhorn/nfs-ganesha
+    source-tag: v5_20240430
     source-depth: 1
     # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L12-L14
     build-packages:
@@ -114,24 +114,17 @@ parts:
       - nfs4-acl-tools
       - xfsprogs
       - e2fsprogs
+      # Required by the rancher fork of nfs-ganesha, otherwise we get the error:
+      # ganesha.nfsd: error while loading shared libraries: libcurl-gnutls.so.4: cannot open shared object file: No such file or directory
+      # ganesha.nfsd: error while loading shared libraries: libjson-c.so.5: cannot open shared object file: No such file or directory
+      - libcurl3-gnutls
+      - libjson-c5
 
     override-build: |
       # https://github.com/longhorn/longhorn-share-manager/blob/v1.6.2/package/Dockerfile#L17-L22
       curl -L https://github.com/nfs-ganesha/ntirpc/archive/refs/tags/v5.0.tar.gz | tar zx
-
-      # Currently, ntirpc v5.0 fails to build with the following error:
-      # /usr/bin/ld: libntirpc/src/libntirpc.so.5.0: undefined reference to `assert'
-      # This issue has been fixed in v5.8 and newer.
-      # We're applying that bug fix patch: https://github.com/nfs-ganesha/ntirpc/pull/279
-      # Moving to /tmp, so we can apply the patch.
-      mv ntirpc-5.0 /tmp/
-      pushd /tmp/ntirpc-5.0
-      cp $CRAFT_PROJECT_DIR/correct-include-assert.patch ./
-      git apply -v correct-include-assert.patch
-      popd
-
       rm -r src/libntirpc
-      mv /tmp/ntirpc-5.0 src/libntirpc
+      mv ntirpc-5.0 src/libntirpc
 
       # build ganesha only supporting nfsv4 and vfs.
       # set NFS_V4_RECOV_ROOT to /tmp we don't support recovery in this release.
