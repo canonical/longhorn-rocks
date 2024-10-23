@@ -20,6 +20,7 @@ run-user: _daemon_
 
 platforms:
   amd64:
+  arm64:
 
 environment:
   APP_VERSION: v0.0.41
