@@ -186,6 +186,23 @@ parts:
     override-build: |
       set -eux -o pipefail
 
+      # When building tgt, we're getting this error on arm64:
+      #
+      # bs.c: In function ‘bs_sig_request_done’:
+      # bs.c:196:15: error: ‘read’ writing 1 byte into a region of size 0 overflows the destination [-Werror=stringop-overflow=]
+      #   196 |         ret = read(fd, (char *)siginfo, sizeof(siginfo));
+      #
+      # After some investigation, it seems that this Warning is not a false positive.
+      # Because defined(__NR_signalfd) is false, signalfd_siginfo is an empty structure, which means
+      # that siginfo is actually an array of elements that have 0 bytes in size.
+      # It seems that on arm64, there's only __NR_signalfd4, not __NR_signalfd.
+      # Interestingly, this does not occur on ubuntu 22.04.
+      # xref: https://www.spinics.net/lists/linux-stgt/msg04783.html
+      #
+      # This patch is a cherry-pick of the following commit (+ resolved conflicts), which solves this issue:
+      # https://github.com/fujita/tgt/commit/7ea559753e647e6a5fa5a0ca3c29ba417d9744b7
+      git apply -v $CRAFT_PROJECT_DIR/fix-arm64-compile-breakage.patch
+
       make
       make install
 
