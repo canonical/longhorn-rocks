@@ -21,6 +21,7 @@ base: ubuntu@24.04
 build-base: ubuntu@24.04
 platforms:
   amd64:
+  arm64:
 
 services:
   longhorn-manager:
@@ -97,5 +98,15 @@ parts:
       - zip
       - unzip
       - kmod
-    stage-snaps:
-      - iputils
+      # Original Dockerfile is installing iputils. The iputils snap does not have an arm64 target,
+      # so we can't use that for arm64.
+      # The iputils rpm from suse contains the following binaries: arping, clockdiff, ping, tracepath.
+      # It also contains symlinks for ping6 and tracepath6.
+      - iputils-arping
+      - iputils-clockdiff
+      - iputils-ping
+      - iputils-tracepath
+    override-build: |
+      # iputils-ping already contains a symlink for ping6.
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      ln -s tracepath $CRAFT_PART_INSTALL/usr/bin/tracepath6
