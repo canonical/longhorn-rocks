@@ -15,16 +15,16 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Maximize build space
-        uses: AdityaGarg8/remove-unwanted-software@v4.1
+        uses: AdityaGarg8/remove-unwanted-software@8831c82abf29b34eb2caac48d5f999ecfc0d8eef # v4.1
         with:
           remove-android: 'true'
           remove-haskell: 'true'
           remove-codeql: 'true'
           remove-swapfile: 'true'
       - name: Checkout repository
-        uses: actions/checkout@v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.8'
       - name: Setup environment
