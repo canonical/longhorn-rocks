@@ -1,0 +1,82 @@
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+# Rockcraft definition for Longhorn CLI image:
+# longhornio/longhorn-cli:v1.7.0
+
+name: longhorn-cli
+summary: Rock containing Longhorn CLI component.
+description: |
+  Rock containing Longhorn CLI component: https://github.com/longhorn/cli
+  Aims to replicate the upstream official image: longhornio/longhorn-cli:v1.7.0
+license: Apache-2.0
+
+version: "v1.7.0"
+
+# NOTE(aznashwan): the base for the CLI image is the Suse Linux Enterprise
+# Base Container Image (SLE BCE) Service Pack 6 which ships with Linux 6.4,
+# and is thus most comparable to 24.04:
+# https://github.com/longhorn/cli/blob/v1.7.0/package/Dockerfile#L17
+base: ubuntu@24.04
+build-base: ubuntu@24.04
+platforms:
+  amd64:
+
+services:
+  longhorn-cli:
+    summary: "longhorn-cli service"
+    startup: enabled
+    override: replace
+    # https://github.com/longhorn/cli/blob/v1.7.0/package/Dockerfile#L40
+    command: "longhornctl [ version ]"
+    on-success: shutdown
+    on-failure: shutdown
+
+entrypoint-service: longhorn-cli
+
+parts:
+  # NOTE(aznashwan): the longhorn binary is built within a Docker container
+  # which is set up by Rancher's Dapper tool: https://github.com/rancher/dapper
+  # The setup steps for the build container are contained within this Dockerfile:
+  # https://github.com/longhorn/cli/blob/v1.7.0/Dockerfile.dapper
+  # The Makefile targets are just the scripts found in the scripts/ directory which
+  # are executed within the Dapper build container:
+  # https://github.com/longhorn/cli/blob/v1.7.0/Makefile#L10-L11
+  add-packages:
+    plugin: nil
+    # https://github.com/longhorn/cli/blob/v1.7.0/package/Dockerfile#L30
+    stage-packages:
+      - jq
+
+  build-longhorn-cli:
+    plugin: nil
+    source-type: git
+    source: https://github.com/longhorn/cli
+    source-tag: v1.7.0
+    source-depth: 1
+    build-snaps:
+      # https://github.com/longhorn/cli/blob/v1.7.0/Dockerfile.dapper#L1
+      - go/1.22/stable
+    build-environment:
+      - GOOS: linux
+      - GOARCH: $CRAFT_ARCH_BUILD_FOR
+      - CGO_ENABLED: 0
+      - VERSION: $CRAFT_PROJECT_VERSION
+    override-build: |
+      # https://github.com/longhorn/cli/blob/v1.7.0/package/Dockerfile#L15
+      mkdir -p $CRAFT_PART_INSTALL/usr/local/sbin/
+
+      # https://github.com/longhorn/cli/blob/v1.7.0/dapper/build#L18
+      LINKFLAGS="-X github.com/longhorn/cli/meta.Version=$VERSION -extldflags -static -s"
+      go build --gcflags=all="-l" -ldflags "$LINKFLAGS" -o $CRAFT_PART_INSTALL/usr/local/sbin/longhornctl ./cmd/remote
+      go build --gcflags=all="-l" -ldflags "$LINKFLAGS" -o $CRAFT_PART_INSTALL/usr/local/sbin/longhornctl-local ./cmd/local
+
+  add-spdk:
+    # https://github.com/longhorn/cli/blob/v1.7.0/package/Dockerfile#L10C20-L15
+    plugin: dump
+    source-type: git
+    source: https://github.com/longhorn/spdk.git
+    source-commit: a6478cde7e0cff2fb09992868308a7387aa5202a
+    source-depth: 1
+    organize:
+      '*': spdk/
